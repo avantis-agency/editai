@@ -1,0 +1,38 @@
+# Secrets: keys and tokens live in the environment, never in a file of the squad
+.env
+.env.*
+*.key
+*.pem
+*token*.txt
+
+# Dependencies and engine state (dependencies install into ~/.nirvana, never here)
+node_modules/
+.nirvana/
+.squads-staging/
+__pycache__/
+*.pyc
+
+# Run outputs belong in the user's project (editai/, .squads-outputs/), never in the squad
+.squads-outputs/
+outputs/
+work/
+editai/
+preview_cache/
+*.mp4
+*.spec.json
+*.qa.json
+*.qa.md
+*.feedback.json
+*.versions.json
+pending-notes.md
+
+# The full library is pulled into ~/.nirvana/cache/editai; the squad keeps the kit only
+assets/music/**/*.mp3
+*.part
+
+# Backups and OS files
+*.bak
+*.orig
+*~
+.DS_Store
+Thumbs.db

@@ -1,0 +1,445 @@
+# Video AI Tool Registry
+# Canonical inventory of FAMILIES consumed by tool-router.
+# Internal ids (veo-3-1, kling-3-0, …) are this squad's routing keys, not vendor catalog.
+# Durations, prices, model codes: resolve this run. Dated snapshot: references/state-of-the-art.md.
+# Live card wins. Do not copy SOTA numbers back into agents.
+
+version: "2.0.0"
+
+# Categories: t2v (text-to-video), i2v (image-to-video), lipsync, avatar, orchestration, post-processing, audio
+
+tools:
+  # ========== CLOUD T2V/I2V NATIVE ==========
+  - id: veo-3-1
+    name: "Veo"
+    vendor: "Google"
+    category: t2v
+    api_available: true
+    api_provider: "Gemini API / Vertex"
+    strengths:
+      - "Native dialogue + SFX generation"
+      - "Prompt adherence"
+      - "Last-frame, scene extension, reference images (confirm on the live Veo page)"
+    when_to_use:
+      - "Dialogue-heavy scenes (English primary)"
+      - "Photorealistic broadcast-quality"
+      - "When prompt adherence is critical"
+    duration_resolve: "Live Veo card this run. House default 8 s when the brief is silent and the card still allows it."
+    auth: "GOOGLE_API_KEY or GEMINI_API_KEY"
+    gpu_required: false
+
+  - id: grok-imagine
+    name: "Grok Imagine"
+    vendor: "xAI"
+    category: t2v
+    api_available: true
+    api_provider: "Grok CLI (subscription) or Imagine API"
+    strengths:
+      - "Native audio always on (speech in quotes)"
+      - "CLI and API durations from grok --help / doctor this run"
+      - "Extend and edit endpoints on the credit rail"
+    when_to_use:
+      - "Default when grok is on PATH"
+      - "Talking-head with included audio"
+    duration_resolve: "grok --help / doctor this run. House default CLI 6 or 10 s when the brief is silent and the help still lists them."
+    auth: "grok on PATH or XAI_API_KEY"
+    gpu_required: false
+
+  - id: sora-2-pro
+    name: "Sora"
+    vendor: "OpenAI"
+    category: t2v
+    api_available: false
+    api_provider: "OpenAI Videos API. Confirm https://developers.openai.com/api/docs/guides/video-generation this run. Never primary."
+    strengths:
+      - "Synced audio (historical)"
+    when_to_use:
+      - "Only when OPENAI_API_KEY is set AND every other live engine failed AND the Videos API page still lists a callable model"
+    duration_resolve: "Live Videos API page this run. If unlisted, drop from the live set."
+    auth: "OPENAI_API_KEY"
+    gpu_required: false
+
+  - id: runway-gen-4
+    name: "Runway"
+    vendor: "Runway"
+    category: t2v
+    api_available: true
+    api_provider: "Runway REST API. Live model id from the account dashboard this run."
+    strengths:
+      - "Reference-conditioned I2V"
+      - "Camera / 3D control"
+    when_to_use:
+      - "Reference-conditioned I2V"
+      - "When RUNWAY_API_KEY is live"
+    duration_resolve: "Live Runway card this run. Do not treat a 60 s SKU as the one-shot default."
+    auth: "RUNWAY_API_KEY"
+    gpu_required: false
+
+  - id: kling-3-0
+    name: "Kling"
+    vendor: "Kuaishou"
+    category: t2v
+    api_available: true
+    api_provider: "Kling API / FAL.ai. Live fal id this run."
+    strengths:
+      - "Native audio, multi-shot, first/last frame when the live schema lists them"
+      - "Element references, multilingual"
+    when_to_use:
+      - "Continuity_chain dual-keyframe"
+      - "Shots longer than the live Veo one-shot"
+      - "Native audio outside English"
+    duration_resolve: "Live fal / Kling card this run."
+    auth: "FAL_KEY or KLING_API_KEY"
+    gpu_required: false
+  - id: kling-2-6-pro
+    name: "Kling previous generation (legacy fallback)"
+    vendor: "Kuaishou"
+    category: t2v
+    api_available: true
+    api_provider: "FAL.ai"
+    strengths:
+      - "Native A/V, first/last on some SKUs"
+    when_to_use:
+      - "Fallback when the current Kling generation is unavailable on fal this run"
+    duration_resolve: "Live fal id this run. Prefer the current Kling generation first."
+    auth: "FAL_KEY"
+    gpu_required: false
+
+  - id: luma-ray-2
+    name: "Luma Ray"
+    vendor: "Luma AI"
+    category: i2v
+    api_available: true
+    api_provider: "FAL.ai or Luma API. Live id this run."
+    strengths:
+      - "3D-aware camera movements"
+      - "Object-centric motion"
+      - "Keyframe interpolation (frame0+frame1)"
+      - "Realistic motion physics"
+    when_to_use:
+      - "Product shots with camera orbits"
+      - "Smooth shot-to-shot transitions"
+      - "Image-to-video from still frames"
+    duration_resolve: "Live fal / Luma card this run."
+    auth: "FAL_KEY or LUMA_API_KEY"
+    gpu_required: false
+
+  - id: higgsfield
+    name: "Higgsfield (Soul ID / Seedance / Marketing Studio)"
+    vendor: "Higgsfield"
+    category: t2v-i2v
+    api_available: true
+    api_provider: "@higgsfield/cli (shell-out). Ids from `higgsfield model list` this run."
+    strengths:
+      - "Soul ID — identidade de personagem/produto travada entre gerações (consistência forte)"
+      - "Seedance keyframe-chaining (start_image/end_image → jornada contínua)"
+      - "Marketing Studio — UGC/product ad falado direto, Click-to-Ad por URL"
+      - "Upscale Topaz 4K/8K when listed"
+    when_to_use:
+      - "Personagem/produto consistente entre tomadas (hero-image + Soul ID)"
+      - "Jornada encadeada que varre como tomada única (Seedance)"
+      - "Anúncio UGC / product ad vertical"
+    duration_resolve: "higgsfield model get <id> this run."
+    audio: "per-destination (--generate_audio false=hero/loop, true=publicar)"
+    auth: "higgsfield auth login (OAuth) ou HF_KEY"
+    gpu_required: false
+    reference: "lib/video-fundamentals/higgsfield-cli.md"
+
+  # ========== OSS T2V/I2V (SELF-HOSTED) ==========
+  - id: wan-2-2
+    name: "Wan"
+    vendor: "Alibaba"
+    category: t2v-i2v
+    api_available: false
+    strengths:
+      - "MoE architecture"
+      - "Apache 2.0 license"
+      - "MoE; FLF2V when the installed checkpoint exposes it"
+      - "Bilingual (EN/ZH)"
+    when_to_use:
+      - "Long-form consistency via FLF2V"
+      - "Open-source control workflows"
+      - "Local GPU rendering"
+    duration_resolve: "ComfyUI /object_info this run. Never download weights."
+    min_vram_gb_floor: 12
+    framework: "ComfyUI (WanVideoWrapper by kijai)"
+    cost_tier: free
+    gpu_required: true
+
+  - id: hunyuan-video
+    name: "HunyuanVideo"
+    vendor: "Tencent"
+    category: t2v
+    api_available: false
+    strengths:
+      - "Open-source (custom license)"
+      - "ComfyUI native"
+      - "LoRA stacking support"
+      - "Bilingual text rendering"
+    when_to_use:
+      - "Local/serverless workflows"
+      - "Character LoRA training"
+      - "Cost-free at scale (GPU only)"
+    duration_resolve: "ComfyUI /object_info this run. Never download weights."
+    min_vram_gb_floor: 24
+    framework: "ComfyUI (HunyuanVideoWrapper by kijai)"
+    cost_tier: free
+    gpu_required: true
+
+  - id: ltx-2-3
+    name: "LTX"
+    vendor: "Lightricks"
+    category: t2v-i2v
+    api_available: false  # self-hosted or limited cloud
+    strengths:
+      - "Real-time generation when the installed checkpoint is real-time capable"
+      - "Native audio generation"
+      - "Fast drafting"
+      - "Portrait-optimized"
+    when_to_use:
+      - "Quick iteration / prototyping"
+      - "Low-latency drafting"
+      - "Audio-enabled video"
+    duration_resolve: "ComfyUI /object_info this run. Never download weights."
+    min_vram_gb_floor: 12
+    framework: "ComfyUI (ComfyUI-LTXVideo)"
+    cost_tier: free
+    gpu_required: true
+
+  # ========== LIPSYNC DEDICATED ==========
+  - id: sync-so-lipsync-2-pro
+    name: "Sync.so"
+    vendor: "Sync.so"
+    category: lipsync
+    api_available: true
+    api_provider: "Sync.so REST API. Live model id from the vendor page this run."
+    strengths:
+      - "Studio-grade"
+      - "Zero-shot (no per-person training)"
+      - "Preserves teeth + microexpressions"
+    when_to_use:
+      - "Dubbing live-action footage"
+      - "Broadcast-quality redubbing"
+      - "Multilingual dubbing"
+    duration_resolve: "Vendor API page this run. House LSE bar stays broadcast 1.5 / good 3 / acceptable 5."
+    auth: "SYNC_API_KEY"
+    gpu_required: false
+
+  - id: latentsync-1-6
+    name: "LatentSync"
+    vendor: "ByteDance"
+    category: lipsync
+    api_available: false
+    strengths:
+      - "Diffusion-based"
+      - "SyncNet supervision"
+      - "Open-source"
+      - "512×512 native"
+    when_to_use:
+      - "DIY lipsync refinement"
+      - "Local integration"
+      - "Research workflows"
+    max_resolution: "512x512"
+    min_vram_gb: 12
+    framework: "Standalone or ComfyUI-LatentSyncWrapper"
+    cost_tier: free
+    gpu_required: true
+
+  - id: musetalk-1-5
+    name: "MuseTalk"
+    vendor: "Tencent"
+    category: lipsync
+    api_available: false
+    strengths:
+      - "Real-time 30+ FPS"
+      - "Latent-space inpainting"
+      - "MIT license"
+      - "Mouth-region only (precision)"
+    when_to_use:
+      - "Real-time applications"
+      - "Performance-critical lipsync"
+    min_vram_gb: 8
+    cost_tier: free
+    gpu_required: true
+
+  - id: hedra-character-3
+    name: "Hedra Character"
+    vendor: "Hedra"
+    category: lipsync-avatar
+    api_available: true
+    api_provider: "Hedra SaaS. Live product name this run."
+    strengths:
+      - "Many languages (count on the vendor page this run)"
+      - "Emotion modeling"
+      - "Talking heads"
+      - "Multilingual lipsync"
+    when_to_use:
+      - "Multilingual dialogue / dubbing"
+      - "Talking-head avatars"
+      - "Character consistency across languages"
+    duration_resolve: "Hedra product page this run."
+    cost_tier: mid
+    auth: "HEDRA_API_KEY (subscription)"
+    gpu_required: false
+
+  - id: echomimic-v2
+    name: "EchoMimic V2"
+    vendor: "AntGroup"
+    category: lipsync
+    api_available: false
+    strengths:
+      - "Semi-body animation (lips + torso + hands)"
+      - "Published paper (EchoMimic V2, AAAI); confirm the venue page this run if citing"
+      - "Apache 2.0"
+    when_to_use:
+      - "Full-body lipsync with gestures"
+      - "Naturalistic talking heads"
+    cost_tier: free
+    gpu_required: true
+
+  - id: wav2lip
+    name: "Wav2Lip"
+    vendor: "Community"
+    category: lipsync
+    api_available: false
+    strengths:
+      - "Baseline robust"
+      - "Zero-shot SyncNet discriminator"
+      - "MIT license"
+      - "Fast"
+    when_to_use:
+      - "Fast dubbing baseline"
+      - "Legacy video processing"
+      - "Budget prototyping"
+    cost_tier: free
+    gpu_required: true
+
+  # ========== AVATAR ==========
+  - id: omnihuman-1-5
+    name: "OmniHuman"
+    vendor: "ByteDance"
+    category: avatar
+    api_available: true  # limited
+    strengths:
+      - "Photo-to-talking-head"
+      - "Multimodal input"
+      - "Speech-driven"
+      - "Emotion support"
+    when_to_use:
+      - "Avatar from single photo"
+      - "Talking-head production"
+    cost_tier: mid
+    auth: "subscription"
+    gpu_required: false
+
+  - id: hunyuan-video-avatar
+    name: "HunyuanVideo-Avatar"
+    vendor: "Tencent"
+    category: avatar
+    api_available: false
+    strengths:
+      - "Multi-character dialogue"
+      - "Emotion-aware lipsync"
+      - "Open-source"
+    when_to_use:
+      - "Character-driven avatars"
+      - "Multi-speaker scenes"
+    cost_tier: free
+    gpu_required: true
+
+  - id: synthesia
+    name: "Synthesia"
+    vendor: "Synthesia"
+    category: lipsync-avatar
+    api_available: true
+    strengths:
+      - "130+ languages"
+      - "Enterprise platform"
+      - "Avatar library"
+    when_to_use:
+      - "Enterprise multilingual dubbing"
+      - "Avatar library scaling"
+    cost_tier: enterprise
+    auth: "SYNTHESIA_API_KEY"
+    gpu_required: false
+
+  # ========== ORCHESTRATION ==========
+  - id: comfyui
+    name: "ComfyUI"
+    vendor: "comfyanonymous"
+    category: orchestration
+    api_available: true  # local API endpoint
+    strengths:
+      - "Node-based workflows"
+      - "JSON reproducibility"
+      - "Unifies local + cloud models via API Nodes"
+      - "Central hub for Wan/Hunyuan/LTX/SUPIR"
+    when_to_use:
+      - "Complex multi-model workflows"
+      - "LoRA stacking"
+      - "Upscaling pipelines"
+      - "Reproducible custom pipelines"
+    cost_tier: free
+    gpu_required: true
+    essential_custom_nodes:
+      - "ComfyUI-Manager"
+      - "ComfyUI-WanVideoWrapper (kijai)"
+      - "ComfyUI-HunyuanVideoWrapper (kijai)"
+      - "ComfyUI-LTXVideo (Lightricks)"
+      - "ComfyUI-SUPIR (kijai)"
+      - "ComfyUI-VideoHelperSuite (Kosinkadink)"
+      - "ComfyUI-LatentSyncWrapper (ShmuelRonen)"
+      - "ComfyUI_IPAdapter_plus (cubiq)"
+      - "rgthree-comfy"
+      - "efficiency-nodes-comfyui (jags111)"
+
+  # ========== POST-PROCESSING ==========
+  - id: supir
+    name: "SUPIR"
+    vendor: "Community (kijai)"
+    category: post-processing
+    api_available: false
+    strengths:
+      - "Photorealistic upscaling"
+      - "Detail hallucination / restoration"
+    when_to_use:
+      - "4K/8K upscaling after video gen"
+      - "Detail enhancement"
+    min_vram_gb: 24
+    framework: "ComfyUI-SUPIR"
+    cost_tier: free
+    gpu_required: true
+
+  - id: topaz-video-ai
+    name: "Topaz Video AI"
+    vendor: "Topaz Labs"
+    category: post-processing
+    api_available: false
+    strengths:
+      - "Frame interpolation (24→60fps)"
+      - "Upscaling"
+      - "Motion blur removal"
+    when_to_use:
+      - "Smooth motion output"
+      - "Slow-motion effects"
+      - "Frame count adjustment"
+    cost_tier: premium
+    gpu_required: false
+
+# Decision routing summary
+# Fundamentos transversais (hero-image, chaining, áudio, crédito): lib/video-fundamentals/
+routing_priorities:
+  need_dialogue_english: [veo-3-1, grok-imagine]
+  need_dialogue_multilingual: [hedra-character-3, synthesia]
+  need_photorealism_premium: [veo-3-1, kling-3-0]
+  need_emotional_expressivity: [veo-3-1, grok-imagine]
+  need_motion_control: [runway-gen-4, kling-3-0]
+  need_budget_iteration: [kling-3-0, grok-imagine, ltx-2-3]
+  need_local_gpu_only: [wan-2-2, hunyuan-video, ltx-2-3]
+  need_keyframe_chaining: [higgsfield, luma-ray-2, kling-3-0, wan-2-2]
+  need_consistent_character: [higgsfield, runway-gen-4]
+  need_ugc_ad: [higgsfield]
+  need_lipsync_broadcast: [sync-so-lipsync-2-pro]
+  need_lipsync_local: [latentsync-1-6, musetalk-1-5, wav2lip]
+  need_avatar_from_photo: [omnihuman-1-5, hedra-character-3]
+  need_upscale: [higgsfield, supir, topaz-video-ai]

@@ -1,0 +1,117 @@
+# The retention edit engine (lib/edit-engine, Bun) needs Bun and ffmpeg/ffprobe
+# with libass: no keys, no packages, no downloads. Music and sound effects ship
+# inside the squad (assets/music, assets/sfx, CC0, per-item LICENSES.md).
+# Check a machine with:  bun lib/edit-engine/cli.ts doctor
+# Tested on Windows 10 only (ffmpeg 8.1.1 gyan.dev essentials, Bun 1.4.2).
+#
+# The AI generation pipelines pick their engine at run time by probing what is
+# live (Grok CLI, Veo, fal/Kling, Higgsfield, Runway, XAI); no key is required
+# in the abstract.
+
+schema_version: "1.0"
+
+system:
+  - name: bun
+    # the runtime of every script here; never node
+    check: "bun --version"
+    install:
+      darwin: "curl -fsSL https://bun.sh/install | bash"
+      linux:  "curl -fsSL https://bun.sh/install | bash"
+      win32:  "powershell -c \"irm bun.sh/install.ps1 | iex\""
+
+  - name: ffmpeg
+    # the edit engine needs libass (ass filter) and freetype; gyan.dev "essentials" and full builds have both
+    # ffprobe comes with it; the QA and the preview also use sidechaincompress, ebur128, blackframe, showwavespic
+    check: "ffmpeg -hide_banner -filters | grep -E ' (ass|drawtext|zoompan|loudnorm|bbox|sidechaincompress) '"
+    install:
+      darwin: "brew install ffmpeg"   # 2026 reports say plain Homebrew ffmpeg lacks libass; if the check fails, use a libass build (ffmpeg-full tap)
+      linux:  "sudo apt install -y ffmpeg"
+      win32:  'winget install Gyan.FFmpeg'   # or: choco install ffmpeg -y
+
+# Optional local transcriber (word timings for captions), since 1.1.0:
+#   bun lib/edit-engine/cli.ts transcribe <video> <out.json> [language]
+# calls the editonny skill's own faster-whisper helper as a subprocess
+# (<engine>/.venv python + helpers/transcribe.py, model already downloaded),
+# offline (HF_HUB_OFFLINE=1) and without writing bytecode into the install.
+# Nothing is installed or copied by this squad: no editonny, no transcription.
+# Fallback (exit 3): word timings from another transcriber, phrase onsets
+# checked on the waveform. Measured on a 10 s talking-head test clip (19/10/2026):
+# 76 s on CPU for 10 s of audio, word starts within 87 ms of the hand alignment
+# on average (max 250 ms), against 0.5 to 1.2 s off for Gemini word times.
+
+# Optional reference style meter, since 1.5.0:
+#   bun lib/edit-engine/cli.ts style-extract <video|link> --name <name> --project <dir>
+# calls editonny's helpers/measure_reference.py and helpers/filmstrip.py the same
+# way (subprocess, engine .venv, offline, no bytecode written into the install).
+# On Windows its on-screen text reader is the OpenCV heuristic: text is located,
+# not read (the Apple Vision reader is macOS only); no Tesseract is involved.
+# Without editonny the fallback measures cuts and loudness with ffmpeg.
+# Links: yt-dlp (optional, not installed by activation) for TikTok and YouTube
+# (YouTube with --extractor-args "youtube:player_client=mweb"); Instagram only
+# with APIFY_TOKEN (the Apify path of instagram-intelligence-nirvana). Without
+# them, the person sends the video file. Downloads go to the user's project.
+
+# Optional desktop editor (not installed by activation): Concat 0.2.7+, for
+#   bun lib/edit-engine/cli.ts concat <spec.json> --project-dir <dir under home>
+# which builds a Concat project to adjust by hand. The app must be open with its
+# API on (127.0.0.1:7420). Read the risks in lib/edit-engine/concat.ts first.
+
+env_vars:
+  - name: CONCAT_TOKEN
+    required: false
+    description: "Optional. Token of the Concat API for cli.ts concat (or pass --token-file). Read only, never written by the squad."
+
+  - name: CONCAT_PORT
+    required: false
+    description: "Optional. Port of the Concat API for cli.ts doctor (default 7420; cli.ts concat takes --port)."
+
+  - name: EDITAI_MEDIA
+    required: false
+    description: "Optional. Folder with your own clips for the files in examples/ (they reference ${EDITAI_MEDIA}/clip-a.mp4 and so on)."
+
+  - name: EDITAI_OUT
+    required: false
+    description: "Optional. Output folder for examples/talking-head-batch.json."
+
+  - name: EDITONNY_ENGINE
+    required: false
+    description: "Optional. Path to the editonny engine folder (default ~/.local/share/editonny/engine) for cli.ts transcribe. Absent: supply word timings another way."
+
+  - name: EDITAI_PROJECT
+    required: false
+    description: "Optional. The user's project folder for briefings, client profiles, style profiles and reference downloads (editai/ inside it); --project wins. Never the squad folder."
+
+  - name: APIFY_TOKEN
+    required: false
+    description: "Optional. Apify token for Instagram reference links in cli.ts style-extract (APIFY_API_TOKEN also read). Absent: send the reel as a file. Read only, never written."
+
+  - name: GOOGLE_API_KEY
+    required: false
+    description: "Gemini / Vertex key for Veo. Optional when Grok, fal or Higgsfield is live."
+
+  - name: GEMINI_API_KEY
+    required: false
+    description: 'Alias for GOOGLE_API_KEY.'
+
+  - name: FAL_KEY
+    required: false
+    description: "fal.ai key for Kling, Luma Ray, Sync lipsync via fal. Live model ids this run."
+
+  - name: XAI_API_KEY
+    required: false
+    description: 'xAI Imagine API credit rail. Optional when the Grok CLI is logged in.'
+
+  - name: RUNWAY_API_KEY
+    required: false
+    description: "Runway. Live model id this run from the account dashboard."
+
+  - name: SYNC_API_KEY
+    required: false
+    description: 'Sync.so lipsync. Live model id this run from the vendor API page.'
+
+  - name: ELEVENLABS_API_KEY
+    required: false
+    description: "Optional TTS when Google Chirp is not used."
+
+post_install:
+  - "bun ~/.nirvana/skills/squads/scripts/index-squads.ts --quiet"

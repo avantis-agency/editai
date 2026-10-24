@@ -1,0 +1,362 @@
+<!doctype html>
+<!--
+  Mini editor (prévia de revisão) do EditAi.
+  Adapted from editonny 1.1.0 (commit 08e86fe), skills/editonny/engine/preview/index.html
+  Copyright (c) 2026 Matheus Gomes. MIT License, full text in LICENSE-editonny.md.
+  Changed: PT-BR labels; an Editor tab (1.4.0: live text layer over a clean base video, quick draft,
+  approve, finalize, undo, versions) and a timeline tab for the rendered MP4 (takes, headline,
+  captions and sound effects as tracks, marks, take trims, caption word editing).
+  1.7.0, editor com IA: "Você pede" / "A IA edita" (quick commands and the person's own agent) and a
+  4-track timeline (Vídeo, Legenda, Edição, Áudio) in the Editor tab.
+-->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="referrer" content="no-referrer">
+<title>EditAi · Mini editor</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23121418'/%3E%3Cpath d='M9 8h4v16H9zM19 8l7 8-7 8z' fill='%2350D6AE'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="app" id="app">
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M9 8h4v16H9zM19 8l7 8-7 8z"/></svg>
+      <div class="brand-text">
+        <h1 class="brand-name">EditAi</h1>
+        <span class="project" id="project-name"></span>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Etapas">
+      <button class="tab" role="tab" id="tab-editor" data-tab="editor" aria-controls="view-editor" aria-selected="true">Editor<span class="tab-dot" aria-hidden="true"></span></button>
+      <button class="tab" role="tab" id="tab-review" data-tab="review" aria-controls="view-review" aria-selected="false">Linha do tempo<span class="tab-dot" aria-hidden="true"></span></button>
+    </nav>
+    <button class="icon-btn help-btn" id="help-btn" type="button" aria-label="Atalhos de teclado" title="Atalhos de teclado (?)">?</button>
+  </header>
+
+  <div class="statusline" id="statusline" role="status" aria-live="polite">
+    <span class="status-dot" aria-hidden="true"></span>
+    <span class="status-text" id="status-text">Conectando à prévia…</span>
+    <span class="status-meta" id="status-meta"></span>
+  </div>
+
+  <main class="main">
+    <section class="view" id="view-editor" role="tabpanel" aria-labelledby="tab-editor">
+      <div class="ed" data-ed>
+        <div class="ed-player">
+          <div class="player-frame ed-frame" data-ed-frame>
+            <video data-ed-video playsinline preload="auto"></video>
+            <canvas class="ed-overlay" data-ed-overlay aria-hidden="true"></canvas>
+            <button class="big-play" type="button" data-ed-bigplay aria-label="Reproduzir">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>
+            </button>
+            <div class="video-msg" data-ed-msg hidden></div>
+          </div>
+          <div class="ed-transport">
+            <button class="icon-btn play-btn" type="button" data-ed-play aria-label="Reproduzir ou pausar (Espaço)" title="Reproduzir ou pausar (Espaço)">
+              <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>
+              <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
+            </button>
+            <div class="timecode" role="timer" aria-label="Tempo"><span data-ed-time>00:00.00</span><span class="tc-sep">/</span><span class="tc-total" data-ed-duration>00:00.00</span></div>
+          </div>
+          <input type="range" class="ed-seek" data-ed-seek min="0" max="1000" value="0" aria-label="Posição no vídeo">
+          <p class="ed-source" data-ed-source></p>
+          <button class="btn ghost ed-live" type="button" data-ed-live hidden>Voltar às mudanças ao vivo</button>
+          <p class="ed-approx" data-ed-approx>O texto por cima do vídeo é uma aproximação feita pela página. A prévia rápida mostra o vídeo de verdade.</p>
+        </div>
+
+        <div class="ed-side">
+          <section class="card ai-card ai-ask-card" data-ai-ask aria-labelledby="ai-ask-title">
+            <div class="ai-head"><h2 id="ai-ask-title">Você pede</h2><span class="ai-badge" data-ai-badge hidden><span aria-hidden="true">●</span> IA editando</span></div>
+            <div class="ai-reply-to" data-ai-reply hidden><span data-ai-reply-text></span><button class="btn ghost small" type="button" data-ai-reply-cancel>Cancelar</button></div>
+            <form class="ai-form" data-ai-form>
+              <textarea data-ai-input rows="2" maxlength="500" spellcheck="true" placeholder="Ex.: tira essa pausa" aria-label="O que mudar no vídeo (Enter envia, Shift + Enter quebra a linha)"></textarea>
+              <button class="ai-send" type="submit" data-ai-send aria-label="Enviar pedido (Enter)" title="Enviar (Enter)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg>
+              </button>
+            </form>
+            <div class="ai-under"><p class="ai-context" data-ai-context></p><span class="counter" data-ai-counter></span></div>
+            <p class="ai-agent" data-ai-agent></p>
+            <button class="btn ghost small ai-help-btn" type="button" data-ai-help>O que eu posso pedir?</button>
+          </section>
+
+          <section class="card ai-card" aria-labelledby="ai-list-title">
+            <h2 id="ai-list-title">A IA edita</h2>
+            <ul class="ai-list" data-ai-list aria-live="polite"></ul>
+            <p class="ai-empty" data-ai-empty>Nenhum pedido ainda. Escreva acima o que mudar, como “tira essa pausa” ou “música mais baixa”.</p>
+          </section>
+
+          <div class="card ed-actions">
+            <div class="ed-job" data-ed-job hidden>
+              <div class="ed-job-head"><strong data-ed-job-label></strong><span data-ed-job-pct></span></div>
+              <div class="ed-bar"><span data-ed-job-bar></span></div>
+              <div class="ed-job-stage" data-ed-job-stage></div>
+            </div>
+            <p class="ed-last" data-ed-last hidden></p>
+            <div class="ed-buttons">
+              <button class="btn big" type="button" data-ed-undo>Desfazer</button>
+              <button class="btn big secondary" type="button" data-ed-draft>Gerar prévia rápida</button>
+              <button class="btn big approve" type="button" data-ed-approve>Aprovar</button>
+              <button class="btn big primary" type="button" data-ed-final>Finalizar</button>
+            </div>
+            <p class="ed-why" data-ed-final-why></p>
+            <p class="ed-saved" data-ed-saved></p>
+          </div>
+
+          <fieldset class="ed-controls" data-ed-controls>
+            <section class="card ed-card">
+              <h2>Headline</h2>
+              <textarea data-ed-headline rows="2" maxlength="240" spellcheck="true" aria-label="Texto da headline"></textarea>
+              <p class="field-help" data-ed-headline-help>Uma linha por linha da tela, até 3.</p>
+              <div class="ed-seg" role="radiogroup" aria-label="Quando a headline aparece">
+                <button type="button" role="radio" data-ed-mode="fixed">O vídeo todo</button>
+                <button type="button" role="radio" data-ed-mode="intro">Só nos 3 primeiros segundos</button>
+              </div>
+              <label class="field ed-range"><span class="field-label">Tamanho <span class="counter" data-ed-size-label>100%</span></span>
+                <input type="range" data-ed-size min="80" max="120" step="2" value="100"></label>
+            </section>
+
+            <section class="card ed-card">
+              <h2>Legenda</h2>
+              <div class="ed-seg" role="radiogroup" aria-label="Estilo da legenda">
+                <button type="button" role="radio" data-ed-preset="bold-word">Palavra que cresce</button>
+                <button type="button" role="radio" data-ed-preset="classic">Clássica</button>
+              </div>
+              <p class="field-help">Clique numa palavra para corrigir ou para deixar em amarelo.</p>
+              <div class="ed-words" data-ed-words></div>
+              <div class="ed-word-edit" data-ed-word-edit hidden>
+                <span class="field-help" data-ed-word-what></span>
+                <input type="text" data-ed-word-input maxlength="40" aria-label="Palavra corrigida">
+                <label class="toggle"><span>Em amarelo (palavra-chave)</span><input type="checkbox" class="switch" data-ed-word-emph></label>
+                <button class="btn ghost" type="button" data-ed-word-close>Pronto</button>
+              </div>
+            </section>
+
+            <section class="card ed-card">
+              <h2>Som</h2>
+              <label class="toggle"><span>Música</span><input type="checkbox" class="switch" data-ed-music></label>
+              <label class="field ed-range"><span class="field-label">Volume da música <span class="counter" data-ed-gain-label>0 dB</span></span>
+                <input type="range" data-ed-gain min="-12" max="6" step="1" value="0"></label>
+              <label class="toggle"><span>Whoosh na troca de take</span><input type="checkbox" class="switch" data-ed-whoosh></label>
+              <p class="field-help">O som muda só na prévia rápida.</p>
+            </section>
+          </fieldset>
+
+          <section class="card ed-card">
+            <h2>Versões</h2>
+            <ul class="ed-versions" data-ed-versions></ul>
+          </section>
+
+          <section class="card ed-card">
+            <h2>Notas livres</h2>
+            <p class="field-help" data-ed-notes></p>
+            <button class="btn ghost" type="button" data-ed-open-timeline>Abrir a linha do tempo</button>
+          </section>
+        </div>
+
+        <section class="card trk-card" data-trk aria-label="Linha do tempo do vídeo atual">
+          <div class="trk-top">
+            <h2>Linha do tempo</h2>
+            <span class="hint">Clique para mover o cursor · arraste a régua para correr o vídeo · arraste numa faixa para selecionar um trecho</span>
+            <span class="trk-selinfo" data-trk-selinfo></span>
+            <button class="btn ghost small" type="button" data-trk-clear hidden>Limpar seleção</button>
+          </div>
+          <div class="trk">
+            <div class="trk-labels" aria-hidden="true"><span></span><span>Vídeo</span><span>Legenda</span><span>Edição</span><span>Áudio</span></div>
+            <div class="trk-area" data-trk-area>
+              <div class="trk-ruler" data-trk-ruler></div>
+              <div class="trk-lane trk-video" data-trk-video><img class="trk-film" data-trk-film alt="" draggable="false" hidden><div class="trk-takes" data-trk-takes></div></div>
+              <div class="trk-lane trk-caps" data-trk-caps></div>
+              <div class="trk-lane trk-edits" data-trk-edits></div>
+              <div class="trk-lane trk-audio" data-trk-audio><div class="wave-fill trk-wave" data-trk-wave></div><div class="trk-musicbar" data-trk-music></div></div>
+              <div class="trk-sel" data-trk-sel hidden></div>
+              <div class="trk-playhead" data-trk-playhead><span class="ph-knob"></span></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="view" id="view-review" role="tabpanel" aria-labelledby="tab-review" hidden>
+      <div class="review" data-review>
+        <div class="player-col">
+          <div class="player-frame" data-frame>
+            <video data-video playsinline preload="auto"></video>
+            <button class="big-play" type="button" data-bigplay aria-label="Reproduzir">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>
+            </button>
+            <div class="video-msg" data-video-msg hidden></div>
+          </div>
+          <div class="transport">
+            <button class="icon-btn play-btn" type="button" data-play aria-label="Reproduzir ou pausar (Espaço)" title="Reproduzir ou pausar (Espaço)">
+              <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>
+              <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
+            </button>
+            <div class="timecode" role="timer" aria-label="Tempo"><span data-time>00:00.00</span><span class="tc-sep">/</span><span class="tc-total" data-duration>00:00.00</span></div>
+            <div class="transport-steps">
+              <button class="icon-btn small" type="button" data-jump="-1" aria-label="Voltar 1 segundo" title="Voltar 1 segundo (Shift + ←)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6 5 12l6 6M18 6l-6 6 6 6"/></svg>
+              </button>
+              <button class="icon-btn small" type="button" data-step="-1" aria-label="Voltar 1 quadro" title="Voltar 1 quadro (←)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>
+              </button>
+              <button class="icon-btn small" type="button" data-step="1" aria-label="Avançar 1 quadro" title="Avançar 1 quadro (→)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+              </button>
+              <button class="icon-btn small" type="button" data-jump="1" aria-label="Avançar 1 segundo" title="Avançar 1 segundo (Shift + →)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 6 6-6 6M13 6l6 6-6 6"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="now-playing" data-now></div>
+        </div>
+
+        <div class="work-col">
+          <div class="card timeline-card">
+            <div class="card-head">
+              <h2>Linha do tempo</h2>
+              <div class="tl-zoom">
+                <span class="hint">Arraste para navegar · Duplo clique num take para marcar o trecho</span>
+                <button class="icon-btn small" type="button" data-zoom="out" aria-label="Diminuir zoom" title="Diminuir zoom (tecla -)">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M20 20l-3.6-3.6"/></svg>
+                </button>
+                <span class="zoom-level" data-zoom-level title="Zoom da linha do tempo">1x</span>
+                <button class="icon-btn small" type="button" data-zoom="in" aria-label="Aumentar zoom" title="Aumentar zoom (tecla +)">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M11 8v6M20 20l-3.6-3.6"/></svg>
+                </button>
+                <button class="btn zoom-fit" type="button" data-zoom="fit" title="Mostrar o vídeo inteiro (tecla 0)">Ver tudo</button>
+              </div>
+            </div>
+            <div class="tl-scroll" data-tl-scroll>
+              <div class="timeline" data-timeline>
+                <div class="tl-ruler" data-ruler></div>
+                <div class="tl-track-label">Texto e som</div>
+                <div class="tl-layers" data-layers></div>
+                <div class="tl-track-label">Takes</div>
+                <div class="tl-segments" data-segments></div>
+                <div class="tl-track-label">Legendas</div>
+                <div class="tl-captions" data-captions-track></div>
+                <div class="tl-strip" data-filmstrip><img alt="" data-filmstrip-img draggable="false"></div>
+                <div class="tl-wave" data-wave></div>
+                <div class="tl-overlay" data-marks-overlay></div>
+                <div class="tl-selection" data-selection hidden></div>
+                <div class="tl-playhead" data-playhead><span class="ph-knob"></span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card trims-card" data-trims-card hidden>
+            <div class="card-head">
+              <h2>Ajustes de corte <span class="count" data-trim-count></span></h2>
+              <span class="save-state" data-trims-state></span>
+            </div>
+            <p class="hint">Uma palavra ficou cortada? Arraste a borda do take na linha do tempo. O motor estende ou encurta a partir do take original e empurra o resto do vídeo.</p>
+            <ul class="trims-list" data-trims-list></ul>
+            <div class="trims-actions">
+              <button class="btn ghost" type="button" data-clear-trims>Desfazer tudo</button>
+              <button class="btn secondary" type="button" data-save-trims>Enviar ajustes</button>
+            </div>
+          </div>
+
+          <div class="card captions-card" data-captions-card>
+            <div class="card-head">
+              <h2>Legendas <span class="count" data-caption-count></span></h2>
+              <span class="save-state" data-captions-state></span>
+            </div>
+            <p class="hint">Clique num bloco de legenda na linha do tempo para corrigir uma palavra. Só o texto muda; o tempo de cada palavra fica igual.</p>
+            <div class="caption-editor" data-caption-editor hidden></div>
+            <ul class="trims-list" data-caption-edits></ul>
+            <div class="trims-actions">
+              <button class="btn ghost" type="button" data-clear-captions>Desfazer tudo</button>
+              <button class="btn secondary" type="button" data-save-captions>Enviar correções</button>
+            </div>
+          </div>
+
+          <div class="card marks-card">
+            <div class="card-head">
+              <h2>Marcações <span class="count" data-mark-count></span></h2>
+              <span class="save-state" data-marks-state></span>
+            </div>
+            <p class="hint">Marque o início e o fim de um trecho e escreva o que mudar. O agente editor do EditAi resolve cada nota.</p>
+            <div class="mark-tools">
+              <button class="btn" type="button" data-set-in>Marcar início <kbd>I</kbd></button>
+              <button class="btn" type="button" data-set-out>Marcar fim <kbd>O</kbd></button>
+              <span class="pending" data-pending hidden></span>
+            </div>
+            <form class="note-box" data-note-box hidden>
+              <div class="note-range" data-note-range></div>
+              <input type="text" data-note-input maxlength="500" placeholder="O que deve mudar aqui? Exemplo: tirar esta parte" aria-label="O que deve mudar neste trecho">
+              <div class="note-actions">
+                <button type="button" class="btn ghost" data-note-cancel>Cancelar</button>
+                <button type="submit" class="btn accent-soft">Adicionar marcação</button>
+              </div>
+            </form>
+            <ul class="marks-list" data-marks-list></ul>
+            <p class="marks-empty" data-marks-empty>Nenhuma marcação ainda.</p>
+          </div>
+
+          <div class="actions-bar">
+            <div class="banner" data-banner hidden></div>
+            <div class="actions">
+              <button class="btn secondary" type="button" data-save-marks>Salvar marcações</button>
+            </div>
+            <p class="hint">Aprovar e finalizar ficam na aba Editor.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<dialog class="dialog" id="help-dialog" aria-labelledby="help-title">
+  <form method="dialog">
+    <h2 id="help-title">Atalhos de teclado</h2>
+    <ul class="shortcuts">
+      <li><span><kbd>Espaço</kbd></span>Reproduzir ou pausar</li>
+      <li><span><kbd>←</kbd> <kbd>→</kbd></span>Voltar ou avançar 1 quadro</li>
+      <li><span><kbd>Shift</kbd> + <kbd>←</kbd> <kbd>→</kbd></span>Voltar ou avançar 1 segundo</li>
+      <li><span><kbd>I</kbd></span>Marcar o início do trecho</li>
+      <li><span><kbd>O</kbd></span>Marcar o fim e escrever o que mudar</li>
+      <li><span>Duplo clique num take</span>Marcar o take inteiro</li>
+      <li><span>Clique numa legenda</span>Corrigir uma palavra</li>
+      <li><span><kbd>Esc</kbd></span>Cancelar a marcação</li>
+      <li><span><kbd>+</kbd> <kbd>−</kbd></span>Aumentar ou diminuir o zoom da linha do tempo</li>
+      <li><span><kbd>0</kbd></span>Mostrar o vídeo inteiro na linha do tempo</li>
+      <li><span><kbd>Ctrl</kbd> + roda do mouse</span>Zoom no ponteiro</li>
+      <li><span><kbd>?</kbd></span>Abrir esta ajuda</li>
+    </ul>
+    <p class="hint">Os atalhos valem quando você não está digitando. Na aba Editor: Espaço toca e pausa; a caixa “Você pede” envia com Enter.</p>
+    <div class="dialog-actions"><button class="btn primary" value="close">Entendi</button></div>
+  </form>
+</dialog>
+
+<dialog class="dialog ai-help" id="ai-help-dialog" aria-labelledby="ai-help-title">
+  <form method="dialog">
+    <h2 id="ai-help-title">O que eu posso pedir</h2>
+    <p class="hint">Estes saem na hora, feitos pelo próprio motor, sem IA. Escreva do seu jeito: “tira essa pausa”, “tira a pausa”, “remove this pause”. O cursor e a seleção da linha do tempo vão junto com o pedido.</p>
+    <ul class="ai-help-list" data-ai-help-list></ul>
+    <h3>O resto vai para o seu agente</h3>
+    <p class="hint">Pedidos livres (“dá um zoom quando ela fala water e põe um som de pop”) esperam na fila até o seu agente pegar: o Claude Code ou o Codex que você já usa, sem chave de API paga. No terminal dele, peça para rodar <code>cli.ts agent-inbox &lt;spec&gt; --wait</code> e seguir as instruções do JSON (o passo a passo está no README do EditAi, em “Editor com IA”). Ele só muda o vídeo por operações conferidas pelo motor. Quando o pedido não está claro, ele pergunta aqui, como “precisa de você”.</p>
+    <div class="dialog-actions"><button class="btn primary" value="close">Entendi</button></div>
+  </form>
+</dialog>
+
+<dialog class="dialog" id="confirm-dialog" aria-labelledby="confirm-title">
+  <form method="dialog">
+    <h2 id="confirm-title" data-confirm-title></h2>
+    <p data-confirm-text></p>
+    <div class="dialog-actions">
+      <button class="btn ghost" value="cancel">Voltar</button>
+      <button class="btn primary" value="ok" data-confirm-ok>Confirmar</button>
+    </div>
+  </form>
+</dialog>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

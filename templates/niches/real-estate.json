@@ -1,0 +1,15 @@
+{
+  "id": "real-estate",
+  "name": "Imobiliário",
+  "summary": "Corretor ou imobiliária mostrando imóvel, bairro ou dica de compra e aluguel.",
+  "match": ["imovel", "imoveis", "imobiliaria", "corretor", "corretora", "apartamento", "casa a venda", "aluguel", "condominio", "lancamento imobiliario", "real estate", "realtor", "tour do apartamento"],
+  "recommend": { "destination": "reels_tiktok", "mood": "premium", "reference": "none", "text": "both" },
+  "apply": {
+    "captions": { "preset": "classic", "font_px": 60, "uppercase": false },
+    "headline": { "mode": "fixed", "font_family": "Inter", "font_px": 72 }
+  },
+  "tips": [
+    "O cômodo mais bonito vem primeiro, não a fachada.",
+    "Metragem e bairro na headline valem mais que adjetivo."
+  ]
+}

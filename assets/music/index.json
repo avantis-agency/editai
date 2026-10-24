@@ -1,0 +1,460 @@
+{
+  "library": "EditAi music",
+  "imported_from": "editonny 1.0.0 visuals/library/music (Matheus Gomes, MIT package)",
+  "imported_at": "2026-10-20",
+  "usage": "spec: \"audio\": { \"music\": { \"mood\": \"calm\" } } (first available track of the mood; every mood's first track is in the kit) or { \"mood\": \"calm\", \"track\": \"calm-ghosts\" } or { \"path\": \"@music:calm-ghosts\" }. Resolution per track: the original in the squad, then the original in the cache (`library pull --music`), then the kit transcode.",
+  "moods": {
+    "chill-beat": [
+      "chill-beat-city-in-the-rearview",
+      "chill-beat-opinions",
+      "chill-beat-old-age",
+      "chill-beat-dream-pop",
+      "chill-beat-autumn"
+    ],
+    "groove": [
+      "groove-sleep",
+      "groove-make-money",
+      "groove-make-love",
+      "groove-make-funk"
+    ],
+    "upbeat": [
+      "upbeat-poor-but-happy",
+      "upbeat-blue-skies",
+      "upbeat-letting-go-of-the-past"
+    ],
+    "calm": [
+      "calm-first-snow",
+      "calm-laundry-on-the-wire",
+      "calm-windows-down",
+      "calm-glad-to-be-stuck-inside",
+      "calm-vintage",
+      "calm-morning-coffee",
+      "calm-ghosts",
+      "calm-so-broke"
+    ],
+    "emotional": [
+      "emotional-dreamy-piano-fantasy",
+      "emotional-emotional-piano"
+    ],
+    "hiphop": [
+      "hiphop-hip-hop-driver"
+    ]
+  },
+  "tracks": {
+    "chill-beat-city-in-the-rearview": {
+      "file": "chill-beat/chill-beat-city-in-the-rearview.mp3",
+      "title": "City In The Rearview",
+      "mood": "chill-beat",
+      "author": "HoliznaCC0",
+      "source": "opengameart.org (HoliznaCC0)",
+      "license": "CC0 1.0",
+      "license_basis": "editonny 1.0.0 music/catalog.json (\"CC0 1.0 (public domain); attribution is not required.\") and visuals/README.md",
+      "duration_s": 175.7,
+      "lufs": -10.7,
+      "fill_at_s": 17,
+      "sha256": "7bed6ce57a2430b22cc54f005bc0d111aa0bbbf4243b9081db12d0168369b91b",
+      "kit": {
+        "file": "chill-beat/chill-beat-city-in-the-rearview.m4a",
+        "sha256": "5b6d7e7bf3957cc4653829338db44da304c244a2ca7fdf8e0f0e7358d13d5d40",
+        "codec": "aac",
+        "bitrate_kbps": 96,
+        "duration_s": 175.7,
+        "derived_from_sha256": "7bed6ce57a2430b22cc54f005bc0d111aa0bbbf4243b9081db12d0168369b91b",
+        "note": "starter-kit transcode of the original (CC0 allows it); `library pull --music` brings the 320 kbps original, which is used when present"
+      }
+    },
+    "chill-beat-opinions": {
+      "file": "chill-beat/chill-beat-opinions.mp3",
+      "title": "Opinions",
+      "mood": "chill-beat",
+      "author": "HoliznaCC0",
+      "source": "opengameart.org (HoliznaCC0)",
+      "license": "CC0 1.0",
+      "license_basis": "editonny 1.0.0 music/catalog.json (\"CC0 1.0 (public domain); attribution is not required.\") and visuals/README.md",
+      "duration_s": 168,
+      "lufs": -12.7,
+      "fill_at_s": 24,
+      "sha256": "d17fb6c6fd6aa6436ee0653297b92ab6bc7c24af20f8694668660a956eebdb57",
+      "kit": {
+        "file": "chill-beat/chill-beat-opinions.m4a",
+        "sha256": "a45c7d37fe01ec5f52d239488ea91841f95764ff48a38ac904279eef69ab108a",
+        "codec": "aac",
+        "bitrate_kbps": 96,
+        "duration_s": 168,
+        "derived_from_sha256": "d17fb6c6fd6aa6436ee0653297b92ab6bc7c24af20f8694668660a956eebdb57",
+        "note": "starter-kit transcode of the original (CC0 allows it); `library pull --music` brings the 320 kbps original, which is used when present"
+      }
+    },
+    "chill-beat-old-age": {
+      "file": "chill-beat/chill-beat-old-age.mp3",
+      "title": "Old Age",
+      "mood": "chill-beat",
+      "author": "HoliznaCC0",
+      "source": "opengameart.org (HoliznaCC0)",
+      "license": "CC0 1.0",
+      "license_basis": "editonny 1.0.0 music/catalog.json (\"CC0 1.0 (public domain); attribution is not required.\") and visuals/README.md",
+      "duration_s": 213.9,
+      "lufs": -12.2,
+      "fill_at_s": 11,
+      "sha256": "6931b7ae6e4f247132b7425977cb71cc6692af9ce7dc6141e7e382746407af75"
+    },
+    "chill-beat-dream-pop": {
+      "file": "chill-beat/chill-beat-dream-pop.mp3",
+      "title": "Dream Pop",
+      "mood": "chill-beat",
+      "author": "HoliznaCC0",
+      "source": "opengameart.org (HoliznaCC0)",
+      "license": "CC0 1.0",
+      "license_basis": "editonny 1.0.0 music/catalog.json (\"CC0 1.0 (public domain); attribution is not required.\") and visuals/README.md",
+      "duration_s": 241.7,
+      "lufs": -11.7,
+      "fill_at_s": 3,
+      "sha256": "f9d1a64e5a79c15bd8a2e1a03ea5ee43cd96201013bf4f819a0557a93d692af2"
+    },
+    "chill-beat-autumn": {
+      "file": "chill-beat/chill-beat-autumn.mp3",
+      "title": "Autumn",
+      "mood": "chill-beat",
+      "author": "HoliznaCC0",
+      "source": "opengameart.org (HoliznaCC0)",
+      "license": "CC0 1.0",
+      "license_basis": "editonny 1.0.0 music/catalog.json (\"CC0 1.0 (public domain); attribution is not required.\") and visuals/README.md",
+      "duration_s": 169.8,
+      "lufs": -11.8,
+      "fill_at_s": 0,
+      "sha256": "c12190c1c3587e61580078d01c54d4ab7ab1f742857dc07b9d9d712735631b1a"
+    },
+    "groove-sleep": {
+      "file": "groove/groove-sleep.mp3",
+      "title": "Sleep",
+      "mood": "groove",
+      "author": "HoliznaCC0",
+      "source": "opengameart.org (HoliznaCC0)",
+      "license": "CC0 1.0",
+      "license_basis": "editonny 1.0.0 music/catalog.json (\"CC0 1.0 (public domain); attribution is not required.\") and visuals/README.md",
+      "duration_s": 198,
+      "lufs": -10.2,
+      "fill_at_s": 0,
+      "sha256": "9980347d761c692381952e1de09cde27aa7792c59370a7813f7cb43704028b59",
+      "kit": {
+        "file": "groove/groove-sleep.m4a",
+        "sha256": "0b4669679227b75081f519ffbef28820908641a92b3c31f607c5095453d9f35c",
+        "codec": "aac",
+        "bitrate_kbps": 96,
+        "duration_s": 198,
+        "derived_from_sha256": "9980347d761c692381952e1de09cde27aa7792c59370a7813f7cb43704028b59",
+        "note": "starter-kit transcode of the original (CC0 allows it); `library pull --music` brings the 320 kbps original, which is used when present"
+      }
+    },
+    "groove-make-money": {
+      "file": "groove/groove-make-money.mp3",
+      "title": "Make Money",
+      "mood": "groove",
+      "author": "HoliznaCC0",
+      "source": "opengameart.org (HoliznaCC0)",
+      "license": "CC0 1.0",
+      "license_basis": "editonny 1.0.0 music/catalog.json (\"CC0 1.0 (public domain); attribution is not required.\") and visuals/README.md",
+      "duration_s": 223.9,
+      "lufs": -10.2,
+      "fill_at_s": 1,
+      "sha256": "3f10f346e5ab4c4c63977bd0157926075e0bba768bc48e89515669b1a9c8fe90"
+    },
+    "groove-make-love": {
+      "file": "groove/groove-make-love.mp3",
+      "title": "Make Love",
+      "mood": "groove",
+      "author": "HoliznaCC0",
+      "source": "opengameart.org (HoliznaCC0)",
+      "license": "CC0 1.0",
+      "license_basis": "editonny 1.0.0 music/catalog.json (\"CC0 1.0 (public domain); attribution is not required.\") and visuals/README.md",
+      "duration_s": 226.4,
+      "lufs": -9.9,
+      "fill_at_s": 2,
+      "sha256": "5fc6daf9499bd7e0ebf07bf10eab3e8237ed8634d1949cf3785d420ee4adc418"
+    },
+    "groove-make-funk": {
+      "file": "groove/groove-make-funk.mp3",
+      "title": "Make Funk",
+      "mood": "groove",
+      "author": "HoliznaCC0",
+      "source": "opengameart.org (HoliznaCC0)",
+      "license": "CC0 1.0",
+      "license_basis": "editonny 1.0.0 music/catalog.json (\"CC0 1.0 (public domain); attribution is not required.\") and visuals/README.md",
+      "duration_s": 163,
+      "lufs": -8.8,
+      "fill_at_s": 1,
+      "sha256": "4631f55b7fc2a021f24b22f60ec87735cf9163638b3a79ac1719ea3515949f9c",
+      "kit": {
+        "file": "groove/groove-make-funk.m4a",
+        "sha256": "119a76b5973d24fff79994f814bc3fdc7ca13fd2cc3d0d62a05e3e9f5d3753c0",
+        "codec": "aac",
+        "bitrate_kbps": 96,
+        "duration_s": 163,
+        "derived_from_sha256": "4631f55b7fc2a021f24b22f60ec87735cf9163638b3a79ac1719ea3515949f9c",
+        "note": "starter-kit transcode of the original (CC0 allows it); `library pull --music` brings the 320 kbps original, which is used when present"
+      }
+    },
+    "upbeat-poor-but-happy": {
+      "file": "upbeat/upbeat-poor-but-happy.mp3",
+      "title": "Poor, But Happy",
+      "mood": "upbeat",
+      "author": "HoliznaCC0",
+      "source": "opengameart.org (HoliznaCC0)",
+      "license": "CC0 1.0",
+      "license_basis": "editonny 1.0.0 music/catalog.json (\"CC0 1.0 (public domain); attribution is not required.\") and visuals/README.md",
+      "duration_s": 128,
+      "lufs": -9.2,
+      "fill_at_s": 10,
+      "sha256": "813e975208dfebca5ef09254aeed3115b503067b2db39d38eabfb7d91ac80169",
+      "kit": {
+        "file": "upbeat/upbeat-poor-but-happy.m4a",
+        "sha256": "8dbb27fe3d90b3990055d6d2f8462f32af0f17a18e9e5de94be3926b88ee26c7",
+        "codec": "aac",
+        "bitrate_kbps": 96,
+        "duration_s": 127.9,
+        "derived_from_sha256": "813e975208dfebca5ef09254aeed3115b503067b2db39d38eabfb7d91ac80169",
+        "note": "starter-kit transcode of the original (CC0 allows it); `library pull --music` brings the 320 kbps original, which is used when present"
+      }
+    },
+    "upbeat-blue-skies": {
+      "file": "upbeat/upbeat-blue-skies.mp3",
+      "title": "Blue Skies",
+      "mood": "upbeat",
+      "author": "HoliznaCC0",
+      "source": "opengameart.org (HoliznaCC0)",
+      "license": "CC0 1.0",
+      "license_basis": "editonny 1.0.0 music/catalog.json (\"CC0 1.0 (public domain); attribution is not required.\") and visuals/README.md",
+      "duration_s": 175.6,
+      "lufs": -11.4,
+      "fill_at_s": 12,
+      "sha256": "1b5916797fe6341663a7172d8f653e95691d9462be51537c56ebfaabd81b8696",
+      "kit": {
+        "file": "upbeat/upbeat-blue-skies.m4a",
+        "sha256": "c157b51562ac383f77df619c98ee29576f92d0cf1a5883a3fce4289c454160d7",
+        "codec": "aac",
+        "bitrate_kbps": 96,
+        "duration_s": 175.6,
+        "derived_from_sha256": "1b5916797fe6341663a7172d8f653e95691d9462be51537c56ebfaabd81b8696",
+        "note": "starter-kit transcode of the original (CC0 allows it); `library pull --music` brings the 320 kbps original, which is used when present"
+      }
+    },
+    "upbeat-letting-go-of-the-past": {
+      "file": "upbeat/upbeat-letting-go-of-the-past.mp3",
+      "title": "Letting Go Of The Past",
+      "mood": "upbeat",
+      "author": "HoliznaCC0",
+      "source": "opengameart.org (HoliznaCC0)",
+      "license": "CC0 1.0",
+      "license_basis": "editonny 1.0.0 music/catalog.json (\"CC0 1.0 (public domain); attribution is not required.\") and visuals/README.md",
+      "duration_s": 179.6,
+      "lufs": -13.2,
+      "fill_at_s": 3,
+      "sha256": "9897c9d28ebedc86b14ba810d69992e914b7fbf6c1d8ecec9ff3efd07397ab1a"
+    },
+    "calm-first-snow": {
+      "file": "calm/calm-first-snow.mp3",
+      "title": "First Snow",
+      "mood": "calm",
+      "author": "HoliznaCC0",
+      "source": "opengameart.org (HoliznaCC0)",
+      "license": "CC0 1.0",
+      "license_basis": "editonny 1.0.0 music/catalog.json (\"CC0 1.0 (public domain); attribution is not required.\") and visuals/README.md",
+      "duration_s": 174.1,
+      "lufs": -16.1,
+      "fill_at_s": 11,
+      "sha256": "855a35d81441ec653ceb36b44dbdbd1f750b62a2b530d8ccf2f03172349f6ee8",
+      "kit": {
+        "file": "calm/calm-first-snow.m4a",
+        "sha256": "7b2dc9d9e2a3e189677ee3ebb66fdbc1fa1c509d036029edb31b9777789f24d3",
+        "codec": "aac",
+        "bitrate_kbps": 96,
+        "duration_s": 174.1,
+        "derived_from_sha256": "855a35d81441ec653ceb36b44dbdbd1f750b62a2b530d8ccf2f03172349f6ee8",
+        "note": "starter-kit transcode of the original (CC0 allows it); `library pull --music` brings the 320 kbps original, which is used when present"
+      }
+    },
+    "calm-laundry-on-the-wire": {
+      "file": "calm/calm-laundry-on-the-wire.mp3",
+      "title": "Laundry On The Wire",
+      "mood": "calm",
+      "author": "HoliznaCC0",
+      "source": "opengameart.org (HoliznaCC0)",
+      "license": "CC0 1.0",
+      "license_basis": "editonny 1.0.0 music/catalog.json (\"CC0 1.0 (public domain); attribution is not required.\") and visuals/README.md",
+      "duration_s": 180,
+      "lufs": -17.3,
+      "fill_at_s": 12,
+      "sha256": "931d01538e8f72adb390ccc49c50dd8c482c5aae33b9e39d7b7b8e0037a82102"
+    },
+    "calm-windows-down": {
+      "file": "calm/calm-windows-down.mp3",
+      "title": "Windows Down",
+      "mood": "calm",
+      "author": "HoliznaCC0",
+      "source": "opengameart.org (HoliznaCC0)",
+      "license": "CC0 1.0",
+      "license_basis": "editonny 1.0.0 music/catalog.json (\"CC0 1.0 (public domain); attribution is not required.\") and visuals/README.md",
+      "duration_s": 165.8,
+      "lufs": -13.8,
+      "fill_at_s": 8,
+      "sha256": "54dc5dfb84c8ea71fa16866c4ad14d10ae4063e68d03f0f284156826ad882fac"
+    },
+    "calm-glad-to-be-stuck-inside": {
+      "file": "calm/calm-glad-to-be-stuck-inside.mp3",
+      "title": "Glad To Be Stuck Inside",
+      "mood": "calm",
+      "author": "HoliznaCC0",
+      "source": "opengameart.org (HoliznaCC0)",
+      "license": "CC0 1.0",
+      "license_basis": "editonny 1.0.0 music/catalog.json (\"CC0 1.0 (public domain); attribution is not required.\") and visuals/README.md",
+      "duration_s": 160.9,
+      "lufs": -14.7,
+      "fill_at_s": 11,
+      "sha256": "22eff9485adec756ca44ee5171f9abda70d3bda7983da355a82ae7f3347dd88a"
+    },
+    "calm-vintage": {
+      "file": "calm/calm-vintage.mp3",
+      "title": "Vintage",
+      "mood": "calm",
+      "author": "HoliznaCC0",
+      "source": "opengameart.org (HoliznaCC0)",
+      "license": "CC0 1.0",
+      "license_basis": "editonny 1.0.0 music/catalog.json (\"CC0 1.0 (public domain); attribution is not required.\") and visuals/README.md",
+      "duration_s": 174,
+      "lufs": -11.3,
+      "fill_at_s": 12,
+      "sha256": "42039b4362a0c8fac40fabba2c63de75e7e21d092b58ba00a701283824f3ebf7"
+    },
+    "calm-morning-coffee": {
+      "file": "calm/calm-morning-coffee.mp3",
+      "title": "Morning Coffee",
+      "mood": "calm",
+      "author": "HoliznaCC0",
+      "source": "opengameart.org (HoliznaCC0)",
+      "license": "CC0 1.0",
+      "license_basis": "editonny 1.0.0 music/catalog.json (\"CC0 1.0 (public domain); attribution is not required.\") and visuals/README.md",
+      "duration_s": 192,
+      "lufs": -12.2,
+      "fill_at_s": 6,
+      "sha256": "91de2d8f409730a7fa9b0d94f52d5637d7f913e8cee11d54e462a99b06a86758"
+    },
+    "calm-ghosts": {
+      "file": "calm/calm-ghosts.mp3",
+      "title": "Ghosts",
+      "mood": "calm",
+      "author": "HoliznaCC0",
+      "source": "opengameart.org (HoliznaCC0)",
+      "license": "CC0 1.0",
+      "license_basis": "editonny 1.0.0 music/catalog.json (\"CC0 1.0 (public domain); attribution is not required.\") and visuals/README.md",
+      "duration_s": 90.3,
+      "lufs": -10.4,
+      "fill_at_s": 11,
+      "sha256": "0a5afb8e48704973f1853a351aad9f560ba68b46728cffe948c67ff457c3b1ac",
+      "kit": {
+        "file": "calm/calm-ghosts.m4a",
+        "sha256": "5a62d875a9d40687cc0557b813ac675dbc736b6e372ba52e5e75eb7ff64360ff",
+        "codec": "aac",
+        "bitrate_kbps": 96,
+        "duration_s": 90.3,
+        "derived_from_sha256": "0a5afb8e48704973f1853a351aad9f560ba68b46728cffe948c67ff457c3b1ac",
+        "note": "starter-kit transcode of the original (CC0 allows it); `library pull --music` brings the 320 kbps original, which is used when present"
+      }
+    },
+    "calm-so-broke": {
+      "file": "calm/calm-so-broke.mp3",
+      "title": "So Broke",
+      "mood": "calm",
+      "author": "HoliznaCC0",
+      "source": "opengameart.org (HoliznaCC0)",
+      "license": "CC0 1.0",
+      "license_basis": "editonny 1.0.0 music/catalog.json (\"CC0 1.0 (public domain); attribution is not required.\") and visuals/README.md",
+      "duration_s": 222,
+      "lufs": -10.4,
+      "fill_at_s": 12,
+      "sha256": "0216026edf40002188977b4bc2301aa1c5621b96d61e42e44ee2bff908d53255"
+    },
+    "emotional-dreamy-piano-fantasy": {
+      "file": "emotional/emotional-dreamy-piano-fantasy.mp3",
+      "title": "Dreamy Piano Fantasy",
+      "mood": "emotional",
+      "author": "Rafael Krux, CinematicWaves.com",
+      "source": "FreePD.com via archive.org/details/freepd",
+      "license": "CC0 1.0",
+      "license_basis": "editonny 1.0.0 music/catalog.json (\"CC0 1.0 (public domain); attribution is not required.\") and visuals/README.md",
+      "duration_s": 161.6,
+      "lufs": -17.2,
+      "fill_at_s": 6,
+      "sha256": "b8564e9bd29c17cf2dde56a02d872dbea62a7c0cc864480e955065761bf21f7d",
+      "kit": {
+        "file": "emotional/emotional-dreamy-piano-fantasy.m4a",
+        "sha256": "ba643ad135571e468afae12297dab7783528b3f1f53d7d3f54c6a91f5afe33e9",
+        "codec": "aac",
+        "bitrate_kbps": 96,
+        "duration_s": 161.6,
+        "derived_from_sha256": "b8564e9bd29c17cf2dde56a02d872dbea62a7c0cc864480e955065761bf21f7d",
+        "note": "starter-kit transcode of the original (CC0 allows it); `library pull --music` brings the 320 kbps original, which is used when present"
+      }
+    },
+    "emotional-emotional-piano": {
+      "file": "emotional/emotional-emotional-piano.mp3",
+      "title": "Emotional Piano",
+      "mood": "emotional",
+      "author": "Rafael Krux, CinematicWaves.com",
+      "source": "FreePD.com via archive.org/details/freepd",
+      "license": "CC0 1.0",
+      "license_basis": "editonny 1.0.0 music/catalog.json (\"CC0 1.0 (public domain); attribution is not required.\") and visuals/README.md",
+      "duration_s": 134.4,
+      "lufs": -22.1,
+      "fill_at_s": 7,
+      "sha256": "d1b600b2f5374f373ba360966cdb19954ae1dab15b50ffeb1bd024d400f170d9",
+      "kit": {
+        "file": "emotional/emotional-emotional-piano.m4a",
+        "sha256": "4d5392c12f8547a3260925f789538206c8b6e5f43f7075b3d5da277b8d0b9dba",
+        "codec": "aac",
+        "bitrate_kbps": 96,
+        "duration_s": 134.4,
+        "derived_from_sha256": "d1b600b2f5374f373ba360966cdb19954ae1dab15b50ffeb1bd024d400f170d9",
+        "note": "starter-kit transcode of the original (CC0 allows it); `library pull --music` brings the 320 kbps original, which is used when present"
+      }
+    },
+    "hiphop-hip-hop-driver": {
+      "file": "hiphop/hiphop-hip-hop-driver.mp3",
+      "title": "Hip Hop Driver",
+      "mood": "hiphop",
+      "author": "Frank Nora",
+      "source": "FreePD.com via archive.org/details/freepd",
+      "license": "CC0 1.0",
+      "license_basis": "editonny 1.0.0 music/catalog.json (\"CC0 1.0 (public domain); attribution is not required.\") and visuals/README.md",
+      "duration_s": 107.1,
+      "lufs": -17.6,
+      "fill_at_s": 2,
+      "sha256": "db89db2d0446957542db68884fdbe29747b8ce324593c89e38eb8ecca555624c",
+      "kit": {
+        "file": "hiphop/hiphop-hip-hop-driver.m4a",
+        "sha256": "47315092c31ed942de7304285c89b5b91a12be0df41ad84d848af3f483597844",
+        "codec": "aac",
+        "bitrate_kbps": 96,
+        "duration_s": 107.1,
+        "derived_from_sha256": "db89db2d0446957542db68884fdbe29747b8ce324593c89e38eb8ecca555624c",
+        "note": "starter-kit transcode of the original (CC0 allows it); `library pull --music` brings the 320 kbps original, which is used when present"
+      }
+    }
+  },
+  "kit": {
+    "tracks": [
+      "chill-beat-city-in-the-rearview",
+      "chill-beat-opinions",
+      "groove-sleep",
+      "groove-make-funk",
+      "upbeat-poor-but-happy",
+      "upbeat-blue-skies",
+      "calm-first-snow",
+      "calm-ghosts",
+      "emotional-dreamy-piano-fantasy",
+      "emotional-emotional-piano",
+      "hiphop-hip-hop-driver"
+    ],
+    "format": "AAC 96 kbps .m4a, transcoded from the CC0 originals",
+    "rule": "per mood: the default (first in moods) plus the shortest other track"
+  }
+}

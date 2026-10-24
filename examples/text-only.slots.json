@@ -1,0 +1,13 @@
+{
+  "id": "wellness-coffee-text-only",
+  "background": "${EDITAI_MEDIA}/clip-c.mp4",
+  "background_kind": "video",
+  "hook_lines": ["breakfast is just coffee", "your 3pm self disagrees"],
+  "highlight_words": ["3pm"],
+  "duration": 7,
+  "text_y": 380,
+  "focus": { "x": 0.5, "y": 0.37 },
+  "protect_regions": [{ "label": "eyes and mouth", "x": 340, "y": 500, "w": 400, "h": 380 }],
+  "visual_note": "creator selfie talking head used as a silent background clip, bright studio behind her",
+  "alignment_text": "breakfast is just coffee / your 3pm self disagrees (text only, no speech)"
+}

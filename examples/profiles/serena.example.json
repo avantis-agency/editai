@@ -1,0 +1,18 @@
+{
+  "profile_version": 1,
+  "client": "Serena (exemplo)",
+  "note": "Example only, never a default: the client profile the guided briefing would save after the Serena v2 talking head (bold-word captions, fixed headline, chill-beat music 22 LU under the voice, 100/107% zoom on the take cuts, very low whoosh on clip changes). Real profiles live in the user's project at editai/profiles/<client>.json.",
+  "niche": "health-wellness-ugc",
+  "known": { "destination": "reels_tiktok", "format": "talking_head", "mood": "calm", "captions": true, "headline": true },
+  "reference_style": null,
+  "template": "talking-head-captions",
+  "platforms": ["instagram_reels", "tiktok"],
+  "apply": {
+    "cut": { "zoom_cut_every_s": null, "punch_amount": 0.07 },
+    "captions": { "enabled": true, "preset": "bold-word", "font_px": 72, "y": 1330, "uppercase": true, "emphasis_color": "#ffd84d", "box": false },
+    "headline": { "mode": "fixed", "y": 350, "font_px": 86, "font_family": "Anton" },
+    "music": { "enabled": true, "mood": "chill-beat", "below_voice_db": 22 },
+    "sfx": { "cut_whoosh": true, "gain_db": -30 }
+  },
+  "uses": 0
+}

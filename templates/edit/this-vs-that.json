@@ -1,0 +1,74 @@
+{
+  "id": "this-vs-that",
+  "name": "Isto VS aquilo em tela dividida",
+  "summary": "Split screen: side A on top from frame 0, labels hug the divider so faces stay clear; side B slides in on the bottom half at b_at with a whoosh, the VS badge pops with a hit. A riser before b_at is optional.",
+  "slots": {
+    "id": { "type": "string", "required": true },
+    "media_a": { "type": "media-path", "required": true },
+    "media_a_kind": { "type": "image|video", "default": "image" },
+    "media_b": { "type": "media-path", "required": true },
+    "media_b_kind": { "type": "image|video", "default": "image" },
+    "label_a": { "type": "string[]", "required": true, "description": "exact label of side A, one line" },
+    "label_b": { "type": "string[]", "required": true },
+    "duration": { "type": "seconds", "default": 7 },
+    "b_at": { "type": "seconds", "default": 0.6 },
+    "b_duration": { "type": "seconds", "default": 6.4, "description": "duration - b_at" },
+    "a_focus_y": { "type": "0..1", "default": 0.5, "description": "which part of A stays in its half (0 top, 0.5 centre, 1 bottom); move faces off the labels" },
+    "b_focus_y": { "type": "0..1", "default": 0.5 },
+    "font_px": { "type": "px", "default": 64 },
+    "platforms": { "type": "platform[]", "default": ["instagram_reels", "tiktok"] },
+    "protect_regions": { "type": "rect[]", "default": [] },
+    "visual_note": { "type": "string", "required": true },
+    "alignment_text": { "type": "string", "required": true },
+    "music": { "type": "audio-path", "default": null },
+    "music_mood": { "type": "calm|chill-beat|emotional|groove|hiphop|upbeat", "default": null, "description": "music from the squad library (assets/music/index.json), first track of the mood; music (a path) wins when both are set" },
+    "music_gain_db": { "type": "dB", "default": -12, "description": "fixed music gain before the -14 LUFS normalisation (no voice to duck under)" }
+  },
+  "hooks_timeline": [
+    { "at": 0, "hook": "split_screen", "why": "the comparison reads at a glance" },
+    { "at": 0, "hook": "text_pop_in", "why": "label A readable on frame 0" },
+    { "at": "b_at", "hook": "whoosh", "why": "side B enters" },
+    { "at": "b_at", "hook": "hit", "why": "VS badge lands" },
+    { "at": 0, "hook": "slow_push", "why": "both halves keep moving" }
+  ],
+  "spec": {
+    "spec_version": 1,
+    "id": "$slot:id",
+    "canvas": { "width": 1080, "height": 1920, "fps": 30 },
+    "duration": "$slot:duration",
+    "platforms": "$slot:platforms",
+    "layers": [
+      { "id": "a", "src": "$slot:media_a", "kind": "$slot:media_a_kind", "start": 0, "duration": "$slot:duration", "rect": { "x": 0, "y": 0, "w": 1080, "h": 956 }, "fit": "cover", "crop_focus": { "y": "$slot:a_focus_y" } },
+      { "id": "b", "src": "$slot:media_b", "kind": "$slot:media_b_kind", "start": "$slot:b_at", "duration": "$slot:b_duration", "rect": { "x": 0, "y": 964, "w": 1080, "h": 956 }, "fit": "cover", "crop_focus": { "y": "$slot:b_focus_y" } }
+    ],
+    "camera": [ { "type": "push", "start": 0, "end": "$slot:duration", "from": 1.0, "to": 1.04 } ],
+    "flashes": [],
+    "texts": [
+      { "id": "label_a", "role": "hook", "lines": "$slot:label_a", "start": 0, "end": "$slot:duration", "x": 540, "y": 868, "animation": "pop_in", "fit_width": true,
+        "style": { "font_family": "Inter", "font_px": "$slot:font_px", "bold": true, "color": "#ffffff", "outline_px": 4, "outline_color": "#000000", "shadow_px": 2 } },
+      { "id": "vs", "role": "label", "lines": ["VS"], "start": "$slot:b_at", "end": "$slot:duration", "x": 540, "y": 960, "animation": "pop_in", "fit_width": false,
+        "style": { "font_family": "Inter", "font_px": 72, "bold": true, "color": "#000000", "box": true, "box_color": "#ffd23f", "outline_px": 14 } },
+      { "id": "label_b", "role": "hook", "lines": "$slot:label_b", "start": "$slot:b_at", "end": "$slot:duration", "x": 540, "y": 1052, "animation": "pop_in", "fit_width": true,
+        "style": { "font_family": "Inter", "font_px": "$slot:font_px", "bold": true, "color": "#ffffff", "outline_px": 4, "outline_color": "#000000", "shadow_px": 2 } }
+    ],
+    "audio": {
+      "music": { "path": "$slot:music", "mood": "$slot:music_mood", "gain_db": "$slot:music_gain_db" },
+      "sfx": [
+        { "src": "@sfx:whoosh", "at": "$slot:b_at", "gain_db": -7, "hook": "whoosh", "anchor": true },
+        { "src": "@sfx:hit", "at": "$slot:b_at", "gain_db": -6, "hook": "hit", "anchor": true }
+      ],
+      "loudness": { "target_lufs": -14, "true_peak_db": -1 }
+    },
+    "protect_regions": "$slot:protect_regions",
+    "hooks_applied": [
+      { "hook": "split_screen", "at": 0, "why": "A vs B comparison labels, one of the six text-hook substances" },
+      { "hook": "text_pop_in", "at": 0, "why": "label A readable on frame 0, label B and VS pop on entry" },
+      { "hook": "whoosh", "at": "$slot:b_at", "why": "side B enters" },
+      { "hook": "hit", "at": "$slot:b_at", "why": "VS badge lands" },
+      { "hook": "slow_push", "at": 0, "why": "both halves keep moving" }
+    ],
+    "alignment": { "text": "$slot:alignment_text", "visual": "$slot:visual_note", "audio": "whoosh as B enters, hit on the VS badge" },
+    "frame_at": "=$slot:b_at + 1",
+    "output": { "crf": 20, "preset": "medium" }
+  }
+}

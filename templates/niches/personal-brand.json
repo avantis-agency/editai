@@ -1,0 +1,15 @@
+{
+  "id": "personal-brand",
+  "name": "Marca pessoal",
+  "summary": "A própria pessoa falando de opinião, bastidor, história ou carreira.",
+  "match": ["marca pessoal", "personal brand", "opiniao", "bastidores", "minha historia", "carreira", "linkedin", "creator", "criador de conteudo", "influencer", "storytelling"],
+  "recommend": { "destination": "reels_tiktok", "mood": "energetic", "reference": "none", "text": "both" },
+  "apply": {
+    "captions": { "preset": "bold-word", "font_px": 72, "uppercase": true },
+    "headline": { "mode": "intro", "font_family": "Anton", "font_px": 86 }
+  },
+  "tips": [
+    "Headline só nos 3 primeiros segundos; depois a fala segura.",
+    "Uma opinião clara rende mais que uma lista."
+  ]
+}

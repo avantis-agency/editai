@@ -1,0 +1,15 @@
+{
+  "id": "ecommerce-product",
+  "name": "E-commerce e produto",
+  "summary": "Produto na mão, unboxing, antes e depois ou demonstração de uso.",
+  "match": ["e-commerce", "ecommerce", "loja online", "produto", "unboxing", "lancamento do produto", "frete", "shopee", "mercado livre", "dropshipping", "review do produto", "product", "shop"],
+  "recommend": { "destination": "ad", "mood": "energetic", "reference": "none", "text": "both" },
+  "apply": {
+    "captions": { "preset": "bold-word", "font_px": 72, "uppercase": true },
+    "headline": { "mode": "fixed", "font_family": "Anton", "font_px": 90 }
+  },
+  "tips": [
+    "O produto aparece inteiro no primeiro segundo.",
+    "Preço ou oferta só se a pessoa confirmou o valor."
+  ]
+}

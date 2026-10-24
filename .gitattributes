@@ -1,0 +1,11 @@
+# Text stays LF on every checkout (Git for Windows defaults to CRLF, which breaks the shell scripts in scripts/post-kit)
+* text=auto eol=lf
+
+# Binary files are never converted (assets/checksums.json pins their bytes; cli.ts doctor checks them)
+*.ttf binary
+*.otf binary
+*.m4a binary
+*.mp3 binary
+*.wav binary
+*.png binary
+*.jpg binary

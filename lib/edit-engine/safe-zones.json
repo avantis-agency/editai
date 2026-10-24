@@ -1,0 +1,58 @@
+{
+  "_doc": "Unsafe rectangles per platform on a 1080x1920 canvas (scale proportionally for other sizes). Text bounding boxes measured by the bbox filter must not intersect any rectangle of a target platform. None of these numbers is published by the platform except the Google Shorts overlay and Meta's ad guidance; each value names its source. Researched 2026-10-17. Organic profiles take the most conservative value among the organic guides cited; the ads profile is Meta's 14/35/6 percent rule.",
+  "base": { "width": 1080, "height": 1920 },
+  "platforms": {
+    "instagram_reels": {
+      "label": "Instagram Reels (organic)",
+      "unsafe": [
+        { "label": "top bar (camera, Reels tab)", "x": 0, "y": 0, "w": 1080, "h": 250 },
+        { "label": "bottom (username, caption, audio)", "x": 0, "y": 1490, "w": 1080, "h": 430 },
+        { "label": "right action rail", "x": 950, "y": 1000, "w": 130, "h": 920 },
+        { "label": "left edge crop", "x": 0, "y": 0, "w": 65, "h": 1920 }
+      ],
+      "sources": [
+        "top 250: ScreenSnap, Instagram Reels Size 2026 (https://www.screensnap.pro/blog/instagram-reels-size-guide); Verve Creative gives 220",
+        "bottom 430: Xyla AI social sizes (https://www.xyla.ai/tools/social-media-sizes/); Verve 320, CampaignSwift 400",
+        "right rail 130 and left 65: Xyla AI sides 130; Meta 6 percent side margin (https://www.1clickreport.com/blog/meta-ads-creative-safe-zones-2026-guide); rail starts at y 1000 by our reading of Meta's 'bottom-right 40 percent' note"
+      ]
+    },
+    "facebook_reels": {
+      "label": "Facebook Reels (Meta guidance, also the Reels ads rule)",
+      "unsafe": [
+        { "label": "top 14 percent", "x": 0, "y": 0, "w": 1080, "h": 269 },
+        { "label": "bottom 35 percent", "x": 0, "y": 1248, "w": 1080, "h": 672 },
+        { "label": "bottom-right 40 percent rail", "x": 950, "y": 1152, "w": 130, "h": 768 },
+        { "label": "left 6 percent", "x": 0, "y": 0, "w": 65, "h": 1920 },
+        { "label": "right 6 percent", "x": 1015, "y": 0, "w": 65, "h": 1920 }
+      ],
+      "sources": [
+        "Meta 14/35/6 percent rule as reported by 1ClickReport, Meta Ads Safe Zones 2026 (https://www.1clickreport.com/blog/meta-ads-creative-safe-zones-2026-guide) and Zeely (https://zeely.ai/blog/master-instagram-safe-zones/)"
+      ]
+    },
+    "tiktok": {
+      "label": "TikTok (organic, short caption)",
+      "unsafe": [
+        { "label": "top tabs (Following / For You, search)", "x": 0, "y": 0, "w": 1080, "h": 130 },
+        { "label": "bottom (username, caption, sound, progress)", "x": 0, "y": 1436, "w": 1080, "h": 484 },
+        { "label": "right action rail", "x": 940, "y": 720, "w": 140, "h": 1200 },
+        { "label": "left edge", "x": 0, "y": 0, "w": 44, "h": 1920 }
+      ],
+      "sources": [
+        "130/484/44/140: Cadenus, TikTok safe zone 2026 (https://cadenus.io/resources/blog/tiktok-safe-zone/); ezUGC and Uplads (verified July 2026) agree",
+        "rail vertical start 720: our margin over AdKit's 'right 300px below y=840' (updated 2026-09-10, https://adkit.so/tools/safe-zones/tiktok); a longer caption grows the bottom band upward"
+      ]
+    },
+    "youtube_shorts": {
+      "label": "YouTube Shorts (Google overlay)",
+      "unsafe": [
+        { "label": "top", "x": 0, "y": 0, "w": 1080, "h": 288 },
+        { "label": "bottom (channel, subscribe, title)", "x": 0, "y": 1248, "w": 1080, "h": 672 },
+        { "label": "right buttons", "x": 888, "y": 0, "w": 192, "h": 1920 },
+        { "label": "left", "x": 0, "y": 0, "w": 48, "h": 1920 }
+      ],
+      "sources": [
+        "Google's vertical safe-zone overlay: safe area 840x960 at (48, 288), per Revid (https://www.revid.ai/youtube-shorts-safe-zone) and Somake AI (https://www.somake.ai/blog/youtube-shorts-aspect-ratio)"
+      ]
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "about": "Source of `bun lib/edit-engine/cli.ts library pull`: the CC0 music and sound effects that are not in the starter kit come from editonny, pinned to one commit, into the cache below (never into the squad). The paths are the `file` fields of editonny's music/catalog.json and effects/effects.json at that commit, copied into assets/music/index.json and assets/sfx/index.json; every download is checked against the sha256 recorded there.",
+  "source": {
+    "name": "editonny",
+    "author": "Matheus Gomes",
+    "license": "editonny is MIT; its music and effects libraries are CC0 1.0 (see assets/music/LICENSES.md and assets/sfx/LICENSES.md)",
+    "repo": "https://github.com/soumatheusgomes/editonny",
+    "commit": "05d3dedcddcf6717001b0a3ef91411ec08f614d4",
+    "raw_base": "https://raw.githubusercontent.com/soumatheusgomes/editonny/05d3dedcddcf6717001b0a3ef91411ec08f614d4",
+    "music_dir": "skills/editonny/visuals/library/music",
+    "music_catalog": "skills/editonny/visuals/library/music/catalog.json",
+    "sfx_dir": "skills/editonny/visuals/library/effects",
+    "sfx_catalog": "skills/editonny/visuals/library/effects/effects.json"
+  },
+  "cache_dir": "~/.nirvana/cache/editai",
+  "legacy_cache_dirs": ["~/.nirvana/cache/retention-video-studio"]
+}

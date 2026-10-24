@@ -1,0 +1,15 @@
+{
+  "id": "local-business",
+  "name": "Negócio local (restaurante, clínica, loja)",
+  "summary": "Dono, equipe ou cliente mostrando o lugar, o serviço ou o prato.",
+  "match": ["restaurante", "clinica", "consultorio", "dentista", "odonto", "estetica", "salao", "barbearia", "padaria", "cafeteria", "pizzaria", "loja fisica", "academia", "pet shop", "restaurant", "clinic", "local business", "delivery"],
+  "recommend": { "destination": "reels_tiktok", "mood": "fun", "reference": "none", "text": "both" },
+  "apply": {
+    "captions": { "preset": "bold-word", "font_px": 72, "uppercase": true },
+    "headline": { "mode": "fixed", "font_family": "Anton", "font_px": 86 }
+  },
+  "tips": [
+    "Mostre o lugar ou o serviço nos 2 primeiros segundos.",
+    "Endereço, bairro ou horário na legenda do post, não no vídeo."
+  ]
+}

@@ -1,0 +1,233 @@
+# Prompt Templates per Tool
+# Consumed by prompt-architect agent.
+# Keys (veo-3-1, kling-3-0, …) are this squad's routing ids, not vendor catalog.
+# Dialect (quoted dialogue, motion-first) is method. Duration numbers in golden_rules
+# are house defaults; the live card this run wins.
+
+version: '2.0.0'
+
+templates:
+  # ========== VEO — Quoted Dialogue ==========
+  veo-3-1:
+    tool_id: veo-3-1
+    structure: 'inline prose with explicit blocks'
+    mandatory_blocks:
+      - character_setup
+      - action_emotion
+      - dialogue_quoted
+      - camera_composition
+      - audio_environment
+      - duration_pacing
+    template: |
+      [CHARACTER SETUP]
+      {Physical description: age, hair, clothing, visible features}
+
+      [ACTION + EMOTION]
+      {Action verb + emotional context + body language}
+
+      [DIALOGUE]
+      {Speaker}: "{text here}" — {tone descriptor}
+
+      [CAMERA]
+      {Shot type: close-up/medium/wide} + {camera movement: static/slow pan/orbit}
+
+      [AUDIO]
+      Diegetic: {sound effects in scene}
+      Non-diegetic: {background ambience}
+
+      [DURATION & PACING]
+      {X seconds, pacing: slow/moderate/quick}
+    golden_rules:
+      - "ALWAYS quote dialogue with \"text\""
+      - "Name the speaker explicitly (A woman says / John replies)"
+      - "Describe visible mouth movements (clearly enunciates / barely whispers)"
+      - "Max ~15-20 words per dialogue block (fits 8s)"
+      - "Multi-speaker: alternate labeled turns"
+    example: |
+      [CHARACTER SETUP]
+      A bearded man, 50s, worn denim jacket, standing in a dimly-lit warehouse.
+      [ACTION + EMOTION]
+      He takes a slow breath, shoulders tense, leans forward toward camera.
+      [DIALOGUE]
+      Man: "We have to leave now, before they find us." — worried whisper
+      [CAMERA]
+      Medium close-up, mouth clearly visible, camera locked and steady.
+      [AUDIO]
+      Diegetic: distant wind, metal creaking
+      Non-diegetic: none
+      [DURATION & PACING]
+      6 seconds, slow pacing.
+
+  grok-imagine:
+    tool_id: grok-imagine
+    structure: "single prose block, speech in quotes (native audio)"
+    template: |
+      {shot size}, {camera move}, {subject and wardrobe from the character anchor}.
+      {action}. "{dialogue}" {tone}.
+      {lighting}. {duration} seconds.
+    golden_rules:
+      - "Speech in quotes; Grok generates native audio from it"
+      - "Duration from grok --help this run; house default 6 or 10 when the brief is silent"
+      - "Do not request audio:false; strip in post for silent destinations"
+
+  kling-3-0:
+    tool_id: kling-3-0
+    structure: 'cinematic direction plus native audio, first/last frames as files'
+    template: |
+      First shot / this shot: {action, camera, light}.
+      Character: {anchor unchanged}.
+      Audio: {dialogue and diegetic}.
+      Duration: {legal seconds from the live Kling card}.
+    golden_rules:
+      - "Continuity: pass last frame of N as first frame of N+1"
+      - "Turbo SKU does not take first/last; do not route Turbo to continuity_chain"
+
+  # ========== SORA — Block Structure (never primary; confirm Videos API listing this run) ==========
+  sora-2:
+    tool_id: sora-2-pro
+    structure: 'labeled blocks with explicit timestamps'
+    mandatory_blocks:
+      - visual
+      - dialogue
+      - audio
+      - motion
+    template: |
+      [VISUAL]
+      {Scene setup + character positioning + lighting + camera angle}
+
+      [DIALOGUE]
+      {Speaker}: "{text}" — at {timestamp}, {emotion/tone}
+
+      [AUDIO]
+      Diegetic: {scene sounds}
+      Non-diegetic: {background/music}
+
+      [MOTION]
+      {Character movement + camera movement}
+    golden_rules:
+      - "Separate [VISUAL], [DIALOGUE], [AUDIO] into distinct blocks"
+      - "Explicit timing: at 00:02, at 00:05"
+      - "Mark diegetic vs non-diegetic audio"
+      - "4s clip = 1-2 dialogue exchanges; 8s = up to 4"
+    example: |
+      [VISUAL]
+      A woman in a yellow raincoat stands on a rain-soaked street corner, smiling
+      as she turns toward the camera. Golden-hour backlit. Close-up.
+      [DIALOGUE]
+      Woman: "Let's go!" — at 00:02, smiling warmly and enthusiastic
+      [AUDIO]
+      Diegetic: light rain patter, distant traffic
+      Non-diegetic: none
+      [MOTION]
+      She steps forward, camera slowly pushes in.
+
+  # ========== KLING previous generation — Simultaneous A/V (legacy dialect) ==========
+  kling-2-6:
+    tool_id: kling-2-6-pro
+    structure: 'scene description with native audio spec'
+    mandatory_blocks:
+      - scene
+      - native_audio
+      - camera
+      - lighting
+      - motion
+    template: |
+      Scene: {Character + action + environment}
+      Native audio: {voice timbre/age/gender}, {language}, {diegetic sound}
+      Camera: {shot type}, {duration}, {resolution}
+      Lighting: {key light + fill}
+      Motion: {primary action}, {speed: slow/moderate/fast}
+    golden_rules:
+      - "Specify voice timbre explicitly (male/female, age, tone)"
+      - "Name language for audio"
+      - "Describe diegetic sounds in scene"
+    example: |
+      Scene: A chef in a bustling kitchen laughs and exclaims "That's the
+      secret ingredient!" while flipping a pan. Stainless steel counters,
+      copper pots reflect flames.
+      Native audio: Male voice, energetic, mid-30s, English, sizzle + metal clanking.
+      Camera: Handheld medium shot, 10 seconds, 1080p.
+      Lighting: Warm tungsten key light from left, bright highlights on pan.
+      Motion: Fast hand movement (flipping), energetic laughter.
+
+  # ========== RUNWAY — References + Motion Brush ==========
+  runway-gen-4:
+    tool_id: runway-gen-4
+    structure: 'reference-conditioned with explicit motion direction'
+    mandatory_blocks:
+      - subject
+      - action
+      - camera
+      - style
+    template: |
+      Subject: {description with reference image tags}
+      Action: {verb phrases, clear motion}
+      Camera: {movement: static/pan/orbit/track} + {speed}
+      Style: {photorealistic/cinematic/anime/etc}
+      Negative: {face distortion, body morphing, flickering, identity loss}
+    golden_rules:
+      - "Feed the reference-image count the live Runway card lists"
+      - "Use Motion Brush UI to paint motion direction"
+      - "Negative prompts are critical for stability"
+
+  # ========== I2V (Image-to-Video) — Motion-First ==========
+  i2v-generic:
+    applies_to: [luma-ray-2, kling-2-6-pro, runway-gen-4, wan-2-2, ltx-2-3]
+    structure: 'motion-first minimal prose'
+    mandatory_blocks:
+      - primary_motion
+      - camera_movement
+      - environmental_effects
+      - speed_modifier
+      - negative
+    template: |
+      [PRIMARY MOTION]
+      {What moves? How fast?}
+      [CAMERA]
+      {Single simple move or static}
+      [ENVIRONMENTAL]
+      {Atmospheric details, particles, lighting}
+      [SPEED]
+      {slow / moderate / rapid}
+      [NEGATIVE]
+      no morphing, no warping, no identity change, stable features, no flicker
+    golden_rules:
+      - "Motion first, everything else secondary"
+      - "ONE simple camera move (don't stack)"
+      - "Always include negative prompt"
+      - "Avoid close-up hands/fingers"
+    example: |
+      [PRIMARY MOTION]
+      A dancer spins gracefully in place, arms extended.
+      [CAMERA]
+      Orbits clockwise around dancer at slow speed.
+      [ENVIRONMENTAL]
+      Stage lights create dramatic shadows across backdrop.
+      [SPEED]
+      moderate
+      [NEGATIVE]
+      face distortion, body morphing, flickering, identity loss, extra limbs.
+
+  # ========== CHARACTER ANCHOR (Character Consistency) ==========
+  character-anchor:
+    purpose: 'Identical character string injected into every shot prompt'
+    template: |
+      {Name}, {age}, {distinctive features}, {clothing}, {mannerisms}
+    example: |
+      Sarah, 32, wavy auburn hair to shoulders, light freckles across nose,
+      olive linen jacket, silver nose ring, tends to tilt head when listening.
+    usage: "Prepend to every shot prompt: '{anchor} + {action for this shot}'"
+
+  # ========== SHOT-TO-SHOT CHAINING ==========
+  shot-chaining:
+    purpose: "Stitching Shot N → Shot N+1"
+    structure:
+      - "Generate Shot N ending with clear pose/position"
+      - "Extract last frame of Shot N"
+      - "Use last_frame as first-frame condition for Shot N+1"
+      - "Prompt Shot N+1: '{Character} continues from previous pose, now {new action}'"
+    supported_tools:
+      - "Kling (dual-keyframe: frame0=last_N, frame1=desired_end_N+1) if the live schema lists first/last"
+      - "Luma Ray (keyframe interpolation)"
+      - "Wan (FLF2V — First-Last-Frame-to-Video) if the installed checkpoint supports it"
+      - "Runway (References — feed last_N as reference image)"

@@ -1,0 +1,18 @@
+{
+  "id": "app-pov-stress-week",
+  "background": "${EDITAI_MEDIA}/clip-b.mp4",
+  "background_kind": "video",
+  "app_screen": "media/app-screen-placeholder.png",
+  "app_screen_kind": "image",
+  "hook_lines": ["POV your stress week", "gets a lighter plan on purpose"],
+  "highlight_words": ["lighter plan"],
+  "duration": 9,
+  "screen_at": 2.5,
+  "screen_duration": 6.5,
+  "text_y": 340,
+  "focus": { "x": 0.5, "y": 0.45 },
+  "protect_regions": [{ "label": "eyes", "x": 370, "y": 505, "w": 400, "h": 140 }],
+  "music_mood": "calm",
+  "visual_note": "creator selfie in a studio; from 2.5 s the app screen drops into a white-framed slot. The screen is a PLACEHOLDER until the real app recording exists",
+  "alignment_text": "POV your stress week / gets a lighter plan on purpose; the slot shows where the plan appears in the app"
+}

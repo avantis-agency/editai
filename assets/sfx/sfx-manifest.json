@@ -1,0 +1,21 @@
+{
+  "provisional": true,
+  "generated_by": "lib/edit-engine/sfx-synth.ts",
+  "sounds": {
+    "whoosh-synth.wav": {
+      "file": "whoosh-synth.wav",
+      "peak_at": 0.3,
+      "duration": 0.6
+    },
+    "hit-synth.wav": {
+      "file": "hit-synth.wav",
+      "peak_at": 0,
+      "duration": 0.8
+    },
+    "riser-synth.wav": {
+      "file": "riser-synth.wav",
+      "peak_at": 1.5,
+      "duration": 1.5
+    }
+  }
+}

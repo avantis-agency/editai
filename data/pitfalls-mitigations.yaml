@@ -1,0 +1,126 @@
+# Video Generation Pitfalls & Mitigations
+# Consumed by video-quality-auditor + video-generator agents.
+# Thresholds (SSIM, LSE, LoRA strength) are this house's bar, not vendor versions.
+
+version: "1.0.0"
+
+pitfalls:
+  - id: face-warp
+    name: "Face warp / morphing"
+    severity: high
+    root_cause: "Motion strength too high; conflicting prompts"
+    detection: "Visual inspection; auto-detect via face landmark drift"
+    mitigation:
+      - "Lower motion_strength param (to 0.4-0.6)"
+      - "Add negative prompt: 'no face deformation, stable features'"
+      - "Use reference image conditioning (IPAdapter or References)"
+
+  - id: identity-drift
+    name: "Identity drift across shots"
+    severity: critical
+    root_cause: "No character anchor; weak reference images"
+    detection: "Face embedding distance between shots > 0.3"
+    mitigation:
+      - "Use identical character anchor string in every shot prompt"
+      - "Feed reference image to each I2V call"
+      - "Train character LoRA (15-30 images) for recurring characters"
+
+  - id: hand-artifacts
+    name: "Hand artifacts (extra fingers, deformed hands)"
+    severity: medium
+    root_cause: "Inherent diffusion weakness at extremities"
+    detection: "Close inspection of hand regions"
+    mitigation:
+      - "Avoid close-up hand shots where possible"
+      - "Describe hands generically ('hands at sides', 'hands clasped')"
+      - "Use inpainting post-hoc if visible"
+
+  - id: flickering
+    name: "Flickering / temporal jitter"
+    severity: high
+    root_cause: "Frame-level inconsistency in diffusion"
+    detection: "Frame-to-frame SSIM < 0.85"
+    mitigation:
+      - "Add negative: 'no flicker, stable features'"
+      - "Increase inference steps (50+ for Wan)"
+      - "Enable temporal smoothing if available in model"
+
+  - id: color-shift
+    name: "Color shift between shots"
+    severity: medium
+    root_cause: "Different lighting inferred per shot"
+    detection: "Histogram comparison across shot boundaries"
+    mitigation:
+      - "Lock color spine in prompt ('Kodak Portra, golden hour')"
+      - "Color-grade in NLE post-hoc"
+      - "Use same seed range across related shots"
+
+  - id: audio-out-of-sync
+    name: "Audio out of sync"
+    severity: critical
+    root_cause: "Native A/V latency; post-dubbing timing mismatch"
+    detection: "LSE (Lip Sync Error) > 3 frames"
+    mitigation:
+      - "Use Veo or Kling native A/V where possible; Sora only if still listed this run and every other live engine failed"
+      - "Post-dubbing: use Sync.so (broadcast) or LatentSync with SyncNet supervision"
+      - "Target LSE ≤ 1.5 frames for broadcast, ≤ 3 for good"
+
+  - id: longform-degradation
+    name: "Long-form scene degradation (>15s)"
+    severity: high
+    root_cause: "Accumulated drift in autoregressive generation"
+    detection: "Quality drop after 15s marker"
+    mitigation:
+      - "Break into 5-10s shots"
+      - "Stitch via last-frame → first-frame chaining"
+      - "Use HoloCine/OneStory architectures for multi-shot coherence"
+
+  - id: prompt-adherence-failure
+    name: "Prompt adherence failure"
+    severity: high
+    root_cause: "Model doesn't attend to specific details"
+    detection: "Missing elements from prompt in output"
+    mitigation:
+      - "Use Veo (prompt adherence) when the live card is available"
+      - "Break complex prompts into [VISUAL]/[DIALOGUE]/[AUDIO] blocks"
+      - "Reduce prompt complexity per shot; split into multiple shots"
+
+  - id: lora-overfitting
+    name: "LoRA overfitting / style bleed"
+    severity: medium
+    root_cause: "LoRA strength too high; training on poor images"
+    detection: "Style dominates over content; identity too rigid"
+    mitigation:
+      - "Use strength_model 0.7-0.9"
+      - "Include 15-30 diverse training images"
+      - "Test with baseline (no LoRA) render first"
+
+  - id: upscaling-artifacts
+    name: "Upscaling artefacts (banding, halos)"
+    severity: medium
+    root_cause: "Aggressive upscaling; wrong algorithm"
+    detection: "Visible halos around edges; color banding"
+    mitigation:
+      - "Use SUPIR for photorealistic"
+      - "Use RIFE/FILM for interpolation"
+      - "Upscale in stages (2x → 2x → 2x) instead of 8x jump"
+
+  - id: comfyui-oom
+    name: "ComfyUI queue hang / OOM"
+    severity: high
+    root_cause: "Too many nodes; VRAM overflow; slow disk I/O"
+    detection: "Process kill or workflow hang"
+    mitigation:
+      - "Use subgraphs to modularize"
+      - "Enable Dynamic VRAM"
+      - "Use FP8 quantization for large models"
+      - "Monitor nvidia-smi during runs"
+
+# Quality thresholds for video-quality-auditor
+quality_thresholds:
+  lse_frames_broadcast: 1.5
+  lse_frames_good: 3.0
+  lse_frames_acceptable: 5.0
+  ssim_temporal_min: 0.85
+  face_embedding_drift_max: 0.30
+  flicker_ratio_max: 0.05

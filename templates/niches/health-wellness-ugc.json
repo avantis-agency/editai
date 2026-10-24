@@ -1,0 +1,15 @@
+{
+  "id": "health-wellness-ugc",
+  "name": "UGC de saúde e bem-estar",
+  "summary": "Pessoa falando sobre rotina, treino, alimentação ou autocuidado, gravada no celular.",
+  "match": ["saude", "bem-estar", "bem estar", "wellness", "pilates", "yoga", "treino", "academia em casa", "nutricao", "nutri", "dieta", "rotina", "autocuidado", "skincare", "habitos", "habits", "fitness", "ugc"],
+  "recommend": { "destination": "reels_tiktok", "mood": "calm", "reference": "none", "text": "both" },
+  "apply": {
+    "captions": { "preset": "bold-word", "font_px": 72, "uppercase": true },
+    "headline": { "mode": "fixed", "font_family": "Anton", "font_px": 86 }
+  },
+  "tips": [
+    "A promessa da headline em até 6 palavras, ligada ao que a pessoa faz na tela.",
+    "Sem promessa de resultado de saúde que a pessoa não possa provar."
+  ]
+}

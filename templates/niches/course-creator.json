@@ -1,0 +1,15 @@
+{
+  "id": "course-creator",
+  "name": "Infoproduto e aulas",
+  "summary": "Professor, mentor ou especialista explicando um conceito, um passo a passo ou um erro comum.",
+  "match": ["infoproduto", "curso", "aula", "mentoria", "mentor", "professor", "ensinar", "passo a passo", "tutorial", "metodo", "lancamento", "course", "lesson", "webinar"],
+  "recommend": { "destination": "reels_tiktok", "mood": "premium", "reference": "none", "text": "both" },
+  "apply": {
+    "captions": { "preset": "classic", "font_px": 64, "uppercase": false },
+    "headline": { "mode": "fixed", "font_family": "Inter", "font_px": 76 }
+  },
+  "tips": [
+    "A headline diz o que a pessoa aprende, não o nome do curso.",
+    "Uma ideia por vídeo; o resto vira série."
+  ]
+}

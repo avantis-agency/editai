@@ -1,0 +1,340 @@
+{
+  "schema": 3,
+  "kind": "squad",
+  "slug": "editai",
+  "contract_version": "1.0.0",
+  "surface_hash": "d7d8a7f1e4997e1e",
+  "prose_hash": "8b845f9a8739e563",
+  "entries": {
+    "agent:agents/VEO_VIDEO.md": {
+      "type": "agent",
+      "hash": "e0238fb5e2eda400"
+    },
+    "agent:agents/audio-producer.md": {
+      "type": "agent",
+      "hash": "66d1c9328948b873"
+    },
+    "agent:agents/character-consistency-keeper.md": {
+      "type": "agent",
+      "hash": "185ec253812d45ba"
+    },
+    "agent:agents/edit-briefing-guide.md": {
+      "type": "agent",
+      "hash": "d283a958fc94398b"
+    },
+    "agent:agents/edit-qa-auditor.md": {
+      "type": "agent",
+      "hash": "cc50be5f7e958723"
+    },
+    "agent:agents/lipsync-specialist.md": {
+      "type": "agent",
+      "hash": "5cea46ef9fa0b530"
+    },
+    "agent:agents/prompt-architect.md": {
+      "type": "agent",
+      "hash": "81158284b5a20206"
+    },
+    "agent:agents/retention-editor.md": {
+      "type": "agent",
+      "hash": "df191171b48d83e8"
+    },
+    "agent:agents/shot-stitcher.md": {
+      "type": "agent",
+      "hash": "81d154dffcef68d2"
+    },
+    "agent:agents/tool-router.md": {
+      "type": "agent",
+      "hash": "3d6b8e90f8dc0e27"
+    },
+    "agent:agents/video-director.md": {
+      "type": "agent",
+      "hash": "526df216a21e798a"
+    },
+    "agent:agents/video-generator.md": {
+      "type": "agent",
+      "hash": "c72d81a5f88f9d99"
+    },
+    "agent:agents/video-intent-archaeologist.md": {
+      "type": "agent",
+      "hash": "9d5d16d8233aaa13"
+    },
+    "agent:agents/video-quality-auditor.md": {
+      "type": "agent",
+      "hash": "d4167fcf662e3418"
+    },
+    "capability:media.video.compose": {
+      "type": "capability",
+      "binding": "workflow:workflows/video-compose",
+      "routing": [
+        "domain:content",
+        "domain:media",
+        "domain:social_media",
+        "domain:video",
+        "produces:reels-mp4",
+        "produces:retention-edit-mp4",
+        "produces:video-mp4-9x16"
+      ],
+      "hash": "c591c80cefe237da"
+    },
+    "capability:video.lipsync_refinement.execute": {
+      "type": "capability",
+      "binding": "workflow:workflows/lipsync-refinement",
+      "routing": [
+        "domain:audio",
+        "domain:media",
+        "domain:video",
+        "produces:retention-edit-mp4",
+        "produces:video-mp4-16x9",
+        "produces:video-mp4-9x16"
+      ],
+      "hash": "0ba24aadbb7290dd"
+    },
+    "capability:video.long_form_multi_shot.execute": {
+      "type": "capability",
+      "binding": "workflow:workflows/long-form-multi-shot",
+      "routing": [
+        "domain:content",
+        "domain:media",
+        "domain:video",
+        "produces:retention-edit-mp4",
+        "produces:video-mp4-16x9",
+        "produces:video-mp4-9x16",
+        "produces:video-storyboard"
+      ],
+      "hash": "1736a14668b56ede"
+    },
+    "capability:video.reference_style.extract": {
+      "type": "capability",
+      "binding": "workflow:workflows/reference-style",
+      "routing": [
+        "domain:content",
+        "domain:media",
+        "domain:video",
+        "produces:edit-qa-report",
+        "produces:retention-edit-mp4",
+        "produces:style-profile-json"
+      ],
+      "hash": "a038f340293a5b6f"
+    },
+    "capability:video.retention_edit.execute": {
+      "type": "capability",
+      "binding": "workflow:workflows/retention-edit",
+      "routing": [
+        "domain:content",
+        "domain:media",
+        "domain:social_media",
+        "domain:video",
+        "produces:edit-qa-report",
+        "produces:edit-spec-json",
+        "produces:reels-mp4",
+        "produces:retention-edit-mp4"
+      ],
+      "hash": "c7b6c6fe93fa0418"
+    },
+    "capability:video.retention_edit.guided": {
+      "type": "capability",
+      "binding": "workflow:workflows/guided-edit",
+      "routing": [
+        "domain:content",
+        "domain:media",
+        "domain:social_media",
+        "domain:video",
+        "produces:client-style-profile",
+        "produces:edit-briefing-plan",
+        "produces:edit-qa-report",
+        "produces:retention-edit-mp4"
+      ],
+      "hash": "a1ada7432d1378f5"
+    },
+    "capability:video.retention_edit.live": {
+      "type": "capability",
+      "binding": "workflow:workflows/live-edit",
+      "routing": [
+        "domain:content",
+        "domain:media",
+        "domain:video",
+        "produces:edit-qa-report",
+        "produces:edit-requests-queue",
+        "produces:edit-review-feedback",
+        "produces:retention-edit-mp4"
+      ],
+      "hash": "bf39245aa2034736"
+    },
+    "capability:video.retention_edit.review": {
+      "type": "capability",
+      "binding": "workflow:workflows/retention-review",
+      "routing": [
+        "domain:content",
+        "domain:media",
+        "domain:video",
+        "produces:edit-qa-report",
+        "produces:edit-review-feedback",
+        "produces:edit-spec-json",
+        "produces:pending-notes",
+        "produces:retention-edit-mp4"
+      ],
+      "hash": "5098b65fa69d30f6"
+    },
+    "capability:video.text_hook_batch.execute": {
+      "type": "capability",
+      "binding": "workflow:workflows/text-hook-batch",
+      "routing": [
+        "domain:content",
+        "domain:media",
+        "domain:social_media",
+        "domain:video",
+        "produces:edit-qa-report",
+        "produces:edit-spec-json",
+        "produces:reels-mp4",
+        "produces:text-hook-video-batch"
+      ],
+      "hash": "c6f92096494937ea"
+    },
+    "capability:video.video_creation_pipeline.execute": {
+      "type": "capability",
+      "binding": "workflow:workflows/video-creation-pipeline",
+      "routing": [
+        "domain:content",
+        "domain:media",
+        "domain:video",
+        "produces:edit-decision-list",
+        "produces:retention-edit-mp4",
+        "produces:video-mp4-9x16",
+        "produces:video-storyboard"
+      ],
+      "hash": "4171b9db18fd5ad2"
+    },
+    "task:tasks/apply-edit-feedback.md": {
+      "type": "task",
+      "hash": "610990b44ba1818e"
+    },
+    "task:tasks/apply-lipsync.md": {
+      "type": "task",
+      "hash": "33e865d3cd5a943a"
+    },
+    "task:tasks/apply-reference-style.md": {
+      "type": "task",
+      "hash": "eeb8f147e6f2c7d0"
+    },
+    "task:tasks/audit-retention-edit.md": {
+      "type": "task",
+      "hash": "d8754c104df0cae2"
+    },
+    "task:tasks/audit-video-quality.md": {
+      "type": "task",
+      "hash": "23d926f9fcb931c8"
+    },
+    "task:tasks/build-shot-list.md": {
+      "type": "task",
+      "hash": "4efb34f086cab791"
+    },
+    "task:tasks/create-character-bible.md": {
+      "type": "task",
+      "hash": "cce89ee00b410091"
+    },
+    "task:tasks/direct-video.md": {
+      "type": "task",
+      "hash": "e41feabbb94b2914"
+    },
+    "task:tasks/extract-reference-style.md": {
+      "type": "task",
+      "hash": "37127f736ed363e7"
+    },
+    "task:tasks/generate-video-clip.md": {
+      "type": "task",
+      "hash": "cb652f5579582617"
+    },
+    "task:tasks/interview-video-intent.md": {
+      "type": "task",
+      "hash": "9e79b8cf56233477"
+    },
+    "task:tasks/plan-character-lora.md": {
+      "type": "task",
+      "hash": "210e169001c8059d"
+    },
+    "task:tasks/plan-retention-edit.md": {
+      "type": "task",
+      "hash": "efd1d04a6de53d4a"
+    },
+    "task:tasks/plan-text-hook-batch.md": {
+      "type": "task",
+      "hash": "de61495e63005f60"
+    },
+    "task:tasks/render-edit-spec.md": {
+      "type": "task",
+      "hash": "b58abcd7e4fd1674"
+    },
+    "task:tasks/review-edit-preview.md": {
+      "type": "task",
+      "hash": "0d68f270f56d671c"
+    },
+    "task:tasks/route-video-tool.md": {
+      "type": "task",
+      "hash": "9db4d67add3d9a77"
+    },
+    "task:tasks/run-edit-briefing.md": {
+      "type": "task",
+      "hash": "ac70803bc6c07b22"
+    },
+    "task:tasks/serve-editor-requests.md": {
+      "type": "task",
+      "hash": "47a61e61cd40a233"
+    },
+    "task:tasks/stitch-shots.md": {
+      "type": "task",
+      "hash": "bd6fe67247aca4f7"
+    },
+    "task:tasks/synthesize-audio.md": {
+      "type": "task",
+      "hash": "c76fdb11e0541faa"
+    },
+    "task:tasks/video-compose.md": {
+      "type": "task",
+      "hash": "8309d56a54efc7c8"
+    },
+    "task:tasks/write-engine-prompt.md": {
+      "type": "task",
+      "hash": "cb067c21fc035bb8"
+    },
+    "workflow:workflows/guided-edit": {
+      "type": "workflow",
+      "hash": "05eed9b5ca8efb63"
+    },
+    "workflow:workflows/lipsync-refinement": {
+      "type": "workflow",
+      "hash": "522231a70848ba4e"
+    },
+    "workflow:workflows/live-edit": {
+      "type": "workflow",
+      "hash": "1ba3f8f0aecaba6a"
+    },
+    "workflow:workflows/long-form-multi-shot": {
+      "type": "workflow",
+      "hash": "1c852d0320ad9211"
+    },
+    "workflow:workflows/reference-style": {
+      "type": "workflow",
+      "hash": "9b7da9f45fc57aa2"
+    },
+    "workflow:workflows/retention-edit": {
+      "type": "workflow",
+      "hash": "61e94b0735d4af0c"
+    },
+    "workflow:workflows/retention-review": {
+      "type": "workflow",
+      "hash": "e5c8c60bb1599452"
+    },
+    "workflow:workflows/text-hook-batch": {
+      "type": "workflow",
+      "hash": "1863704f4ded3247"
+    },
+    "workflow:workflows/video-compose": {
+      "type": "workflow",
+      "hash": "47ce4bedf994304d"
+    },
+    "workflow:workflows/video-creation-pipeline": {
+      "type": "workflow",
+      "hash": "da2ad6ee74d3a0d9"
+    }
+  }
+}

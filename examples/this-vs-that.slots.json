@@ -1,0 +1,23 @@
+{
+  "id": "fitness-hiit-vs-pilates",
+  "media_a": "${EDITAI_MEDIA}/clip-a.mp4",
+  "media_a_kind": "video",
+  "media_b": "${EDITAI_MEDIA}/clip-c.mp4",
+  "media_b_kind": "video",
+  "label_a": ["HIIT on no sleep"],
+  "label_b": ["pilates on no sleep"],
+  "duration": 7,
+  "b_at": 0.6,
+  "b_duration": 6.4,
+  "a_focus_y": 0.25,
+  "b_focus_y": 0.25,
+  "protect_regions": [
+    { "label": "eyes A", "x": 370, "y": 264, "w": 400, "h": 140 },
+    { "label": "mouth A", "x": 410, "y": 529, "w": 300, "h": 140 },
+    { "label": "eyes B", "x": 370, "y": 1228, "w": 400, "h": 140 },
+    { "label": "mouth B", "x": 410, "y": 1493, "w": 300, "h": 140 }
+  ],
+  "music_mood": "upbeat",
+  "visual_note": "two takes of the same creator in one studio, one per half, faces kept off the labels at the divider",
+  "alignment_text": "HIIT on no sleep VS pilates on no sleep"
+}

@@ -1,0 +1,1049 @@
+name: editai
+version: 2.0.0
+protocol: "6.0"
+description: >
+  EditAi (a play on "edita aí" and "Edit AI").
+  Renders retention-edited short-form MP4s (9:16, 1080x1920, H.264, 30 fps) from
+  footage, photos or screen recordings: picks a format template (text-only hook,
+  POV with app screen, this-vs-that split screen, talking head with word captions),
+  applies cataloged edit hooks (impact zoom, slow push, punch-in cut, hard cut,
+  smooth take cut with J-cut and audio crossfade, pattern break, animated text,
+  bold-word captions, fixed headline, speed ramp, B-roll, whoosh, hit, riser,
+  music ducked under the voice, silence before the turn), writes a JSON edit
+  spec, renders it with ffmpeg and libass, and
+  measures the result: platform safe zones on the real text bounding box, text
+  size and dwell time, loudness at -14 LUFS, codec and frame rate. Ships a CC0
+  music (by mood) and sound-effect starter kit with per-item licenses and pulls
+  the rest of the library on demand into a cache outside the squad, renders the
+  same bytes from the same spec, batches text-on-screen hooks and talking heads,
+  opens a local mini editor to change the headline and captions live, render a
+  quick draft and finalize with QA, takes edit requests typed in plain words in
+  that editor (quick commands applied by the engine, the rest served by the
+  person's own Claude Code or Codex agent through a closed set of validated
+  operations, no paid API) over a four-track timeline, runs a short guided briefing for any niche
+  (0 to 5 clickable questions, a suggested plan, a saved profile per client),
+  copies the editing style of a reference video into a style profile it applies,
+  builds an optional Concat project to adjust by hand, and keeps the AI clip generation pipelines of
+  nirvana-video-creator 6.0.0, each ending in the same retention edit pass.
+author: christopher.techuser
+license: SUL-1.0
+derived_from:
+  squad: nirvana-video-creator
+  version: 6.0.0
+  author: Luiz Gustavo Vieira Rodrigues <@gutomec>
+  date: "2026-10-17"
+  note: internal white-label derivative; the original is untouched
+slashPrefix: editai
+# squads.sh / AIOS manifest block (additive). Nirvana reads protocol, capabilities and
+# runtime_requirements; squads.sh reads aios. config/ exists for squads.sh but is not
+# listed under components, which Nirvana keeps to agents, tasks, workflows and schemas.
+aios:
+  minVersion: "2.1.0"
+  type: squad
+tags:
+  - video
+  - retention-editing
+  - short-form
+  - reels
+  - tiktok
+  - shorts
+  - text-hooks
+  - captions
+  - ffmpeg
+  - ai-video
+  - lipsync
+components:
+  agents:
+    - retention-editor.md
+    - edit-qa-auditor.md
+    - edit-briefing-guide.md
+    - video-intent-archaeologist.md
+    - video-director.md
+    - character-consistency-keeper.md
+    - tool-router.md
+    - prompt-architect.md
+    - video-generator.md
+    - lipsync-specialist.md
+    - shot-stitcher.md
+    - audio-producer.md
+    - video-quality-auditor.md
+    - VEO_VIDEO.md
+  tasks:
+    - plan-retention-edit.md
+    - plan-text-hook-batch.md
+    - render-edit-spec.md
+    - audit-retention-edit.md
+    - review-edit-preview.md
+    - serve-editor-requests.md
+    - apply-edit-feedback.md
+    - run-edit-briefing.md
+    - extract-reference-style.md
+    - apply-reference-style.md
+    - interview-video-intent.md
+    - direct-video.md
+    - build-shot-list.md
+    - create-character-bible.md
+    - plan-character-lora.md
+    - route-video-tool.md
+    - write-engine-prompt.md
+    - generate-video-clip.md
+    - apply-lipsync.md
+    - stitch-shots.md
+    - synthesize-audio.md
+    - audit-video-quality.md
+    - video-compose.md
+  workflows:
+    - retention-edit
+    - text-hook-batch
+    - retention-review
+    - live-edit
+    - guided-edit
+    - reference-style
+    - video-creation-pipeline
+    - long-form-multi-shot
+    - lipsync-refinement
+    - video-compose
+runtime_requirements:
+  policy: active
+  minimum:
+    - { runtime: claude-code, version: ">=1.0.0" }
+  compatible:
+    - { runtime: codex, version: ">=0.20.0" }
+    - { runtime: gemini-cli, version: ">=0.4.0" }
+  incompatible: []
+
+features_required:
+  - file_write
+  - max_turns
+  - handoff_artifacts
+features_optional:
+  - web_search
+  - web_fetch
+
+output:
+  base_dir: default
+
+capabilities:
+  - id: video.retention_edit.execute
+    description: >
+      EditAi edits existing clips, photos or screen recordings into a retention-paced
+      9:16 MP4: chooses the format template (text-only hook, POV with app screen,
+      this-vs-that split screen, talking head with bold word-by-word captions and
+      a fixed headline), places cataloged edit hooks on a timeline (impact zoom,
+      slow push, punch-in cut, hard cut, smooth take cut with J-cut, audio
+      crossfade and alternating punch-in, pattern break, animated text entrance,
+      speed ramp, B-roll overlay, whoosh, hit, riser, silence before the turn,
+      music drop, background music ducked under the voice), writes the JSON
+      edit spec, renders it with ffmpeg and libass, and runs a measured QA:
+      text bounding box against Reels, TikTok, Shorts and Facebook Reels safe
+      zones, font size floor, dwell time, eyes and mouth kept clear, -14 LUFS and
+      -1 dBTP, H.264 1080x1920 at 30 fps.
+    domains: [video, media, social_media, content]
+    inputs:
+      - name: material
+        type: array
+        required: true
+        description: clip, photo or screen-recording paths
+      - name: script_or_hook
+        type: string
+        required: true
+        description: on-screen hook text, script or transcript with word timings
+      - name: platforms
+        type: array
+        required: false
+        description: instagram_reels, tiktok, youtube_shorts, facebook_reels (default the first two)
+      - name: review
+        type: boolean
+        required: false
+        description: true opens the local browser preview after the QA for a human review, then applies the feedback (workflow steps review and apply-feedback)
+    outputs:
+      - name: edited_mp4
+        type: file
+        format: mp4
+        description: 9:16 1080x1920 H.264 30 fps MP4 plus a PNG frame
+      - name: edit_spec
+        type: file
+        format: json
+        description: resolved edit spec that produced the MP4 (re-renderable)
+      - name: qa_report
+        type: file
+        format: markdown
+        description: measured QA with verdict PASS, CONCERNS or FAIL
+    tools_required: [read, write, bash]
+    invoke: { type: workflow, ref: workflows/retention-edit }
+    examples:
+      - edite este clipe com cortes secos, zoom de impacto e whoosh para segurar a retenção
+      - add retention editing to this talking head clip with animated captions and punch-in cuts
+      - monte um vídeo isto VS aquilo em tela dividida com estas duas fotos
+    produces: [retention-edit-mp4, edit-spec-json, edit-qa-report, reels-mp4]
+    keywords:
+      - retention editing
+      - edição de retenção
+      - edicao de retencao
+      - editar para retenção
+      - editar para retencao
+      - jump cut
+      - corte seco
+      - cortes secos
+      - impact zoom
+      - zoom de impacto
+      - punch-in
+      - pattern interrupt
+      - quebra de padrão
+      - quebra de padrao
+      - sound effects
+      - efeitos sonoros
+      - whoosh
+      - riser
+      - animated captions
+      - legenda animada
+      - legendas animadas
+      - legenda palavra por palavra
+      - word by word captions
+      - split screen
+      - tela dividida
+      - b-roll
+      - speed ramp
+      - safe zone
+      - área segura
+      - area segura
+      - edit spec
+      - dopamina
+      - ganchos visuais
+      - ganchos sonoros
+      - legenda
+      - legendas
+      - captions
+      - efeito sonoro
+      - sound effect
+      - zooms
+      - mais dinâmico
+      - mais dinamico
+      - engaging
+      - prender a atenção
+      - prender a atencao
+      - vídeo que eu gravei
+      - footage I shot
+      - transição entre takes
+      - transicao entre takes
+      - take transition
+      - j-cut
+      - música de fundo
+      - musica de fundo
+      - background music
+      - ducking
+      - headline fixa
+      - fixed headline
+      - legenda em caixa alta
+      - bold captions
+      - editai
+    example_briefs:
+      - Edite este clipe de 20s com cortes secos, zoom de impacto e whoosh nas transições pra prender a atenção
+      - Add retention editing to my talking head video with word by word animated captions and punch-in cuts
+      - quero editar esse vídeo do app com ganchos visuais e sonoros, legenda animada e área segura do Reels
+      - Make a this-vs-that split screen reel from these two photos with labels and a hit on the VS
+      - meu vídeo tá parado e o pessoal pula nos 3 primeiros segundos, coloca quebra de padrão, zoom e efeitos sonoros
+      - coloca legenda e efeito sonoro nesse vídeo que eu gravei e deixa ele mais dinâmico
+      - Make the reel I filmed more engaging with zooms, captions and sound effects
+      - edita meu talking head com legenda em caixa alta, headline fixa, música de fundo baixinha e transição suave entre os takes
+      - Usa o EditAi pra editar esse vídeo que eu gravei com legenda animada, cortes secos e zoom de impacto
+      - Use EditAi to edit my talking head clip with word by word captions, jump cuts and a whoosh between takes
+    not_for:
+      - gerar vídeo com IA
+      - generate ai video
+      - lipsync
+      - roteiro do zero
+      - script from scratch
+      - live streaming
+    acceptance:
+      - id: editai_edit_mp4_spec
+        description: the MP4 exists and ffprobe reports h264 yuv420p, the spec canvas size, 30 fps and the spec duration within one frame
+        blocking: true
+      - id: editai_edit_spec_saved
+        description: the resolved edit spec JSON sits next to the MP4 and validates with lib/edit-engine/cli.ts validate
+        blocking: true
+      - id: editai_edit_hooks_cataloged
+        description: hooks_applied lists at least 2 hooks and every id exists in references/edit-hooks-catalog.md
+        blocking: true
+      - id: editai_edit_safe_zones
+        description: the measured text bounding boxes clear every unsafe rectangle of each target platform
+        blocking: true
+      - id: editai_edit_qa_verdict
+        description: the QA report verdict is PASS or CONCERNS, never FAIL
+        blocking: true
+      - id: editai_edit_alignment
+        description: the spec declares text, visual and audio intents and the auditor states whether they agree
+        blocking: true
+    fidelity:
+      status: experimental
+      threshold: 0.85
+    score_boost: 1.0
+    model_hint: sonnet
+    estimated_cost_usd: 0.3
+
+  - id: video.retention_edit.review
+    description: >
+      Opens an already rendered retention edit in the EditAi mini editor in the
+      browser (127.0.0.1 only, per-run token, Portuguese interface). The Editor
+      tab draws the headline and the captions over a clean base video, so a new
+      headline text, mode or size, caption style, corrected word or yellow
+      keyword shows at once; a quick-preview button renders a 540x960 draft,
+      approve picks the video in the player, and finalize renders the 1080x1920
+      final with the full QA and copies it to Downloads; undo and a version list
+      go back. The timeline tab is like a light CapCut-style editor: video player, timeline with audio waveform and frame
+      strip, the spec's takes, headline, music, whoosh markers and caption groups
+      as blocks. The person marks stretches with in and out points and a free note,
+      drags a take edge to extend or shorten it from the original clip, switches
+      captions between bold-word and classic, the headline between fixed and intro
+      and edits its text, turns music on or off and changes its gain, turns whoosh
+      on or off, corrects a caption word and approves. Everything is saved to a
+      versioned feedback.json next to the spec. apply-feedback then applies the
+      deterministic changes without AI (style, gain, toggles, caption text, ripple
+      take trims), writes the next spec version, re-renders with the measured QA
+      and lists the free-text marks in pending-notes.md for the retention editor.
+    domains: [video, media, content]
+    inputs:
+      - name: edit_spec
+        type: file
+        required: true
+        description: resolved edit spec JSON of the rendered MP4 (the MP4 sits next to it or is passed with --video)
+    outputs:
+      - name: feedback
+        type: file
+        format: json
+        description: versioned feedback.json with marks, take trims, style, caption fixes and approval
+      - name: next_version
+        type: file
+        format: mp4
+        description: next spec version, its MP4 and QA report after apply-feedback
+      - name: pending_notes
+        type: file
+        format: markdown
+        description: pending-notes.md with the free-text marks and the choices left to the editor
+    tools_required: [read, write, bash]
+    invoke: { type: workflow, ref: workflows/retention-review }
+    examples:
+      - abre a prévia do vídeo editado no navegador pra eu revisar na linha do tempo
+      - open a preview of the edited reel so I can review the timeline and mark changes
+      - quero ver o que está acontecendo na edição e ajustar a legenda e a música
+    produces: [edit-review-feedback, retention-edit-mp4, edit-spec-json, edit-qa-report, pending-notes]
+    keywords:
+      - prévia
+      - previa
+      - prévia visual
+      - previa visual
+      - preview
+      - video preview
+      - revisar no navegador
+      - review in the browser
+      - linha do tempo
+      - timeline
+      - review timeline
+      - editor local
+      - local editor
+      - plataforma local
+      - visualizar a edição
+      - visualizar a edicao
+      - ver a edição
+      - ver a edicao
+      - marcar trecho
+      - mark a section
+      - marcações
+      - marcacoes
+      - ajustar corte
+      - trim the cut
+      - arrastar o corte
+      - corrigir legenda
+      - fix a caption
+      - aprovar vídeo
+      - aprovar video
+      - approve the video
+      - feedback
+      - apply feedback
+      - aplicar feedback
+      - capcut
+      - mini editor
+      - prévia rápida
+      - previa rapida
+      - quick preview
+      - finalizar vídeo
+      - finalizar video
+      - finalize the video
+      - revisão humana
+      - revisao humana
+      - human review
+      - forma de onda
+      - waveform
+    example_briefs:
+      - Abre a prévia do vídeo da academia no navegador, quero revisar na linha do tempo e marcar o que mudar
+      - Open a local preview of the edited reel so I can scrub the timeline, mark changes and approve it
+      - queria visualizar a edição como uma plataforma local, tipo CapCut, e dar uma melhorada no corte e na legenda
+      - deixa eu revisar o vídeo editado no navegador, trocar a headline pra intro, baixar a música e corrigir uma palavra da legenda
+      - Let me review the cut in the browser, drag the take edges and fix a caption word before you render the next version
+      - aplica o feedback que eu deixei na prévia e gera a próxima versão do vídeo
+      - abre o mini editor do vídeo da loja de roupas, quero mudar a headline e ver na hora, gerar uma prévia rápida e finalizar
+    not_for:
+      - gerar vídeo com IA
+      - generate ai video
+      - edição do zero
+      - live streaming
+      - publicar no instagram
+    acceptance:
+      - id: editai_review_loopback
+        description: preview_cache/server.json reported a http://127.0.0.1 URL while the review ran and says stopped afterwards
+        blocking: true
+      - id: editai_review_feedback_saved
+        description: the feedback JSON next to the spec has feedback_version 1, a revision of at least 1 and the sha256 of the reviewed MP4
+        blocking: true
+      - id: editai_review_next_version
+        description: after apply-feedback the next spec, its MP4 and a QA report that is not FAIL exist in the output folder
+        blocking: true
+      - id: editai_review_pending_listed
+        description: every mark with a note appears in pending-notes.md until the editor resolves it
+        blocking: true
+    fidelity:
+      status: experimental
+      threshold: 0.85
+    score_boost: 1.0
+    model_hint: sonnet
+    estimated_cost_usd: 0.1
+
+  - id: video.retention_edit.live
+    description: >
+      AI request box inside the EditAi mini editor of a rendered short-form edit
+      (editor com IA): the person plays the video, moves the cursor or selects a
+      stretch on a four-track timeline (video thumbnails, caption blocks, edit
+      track with headline, zooms, punch-ins and sound effects, audio waveform with
+      the music bar) and types what to change in plain words ("tira essa pausa",
+      "music lower", "zoom here"). Quick commands are resolved by the engine at
+      once (remove the pause at the cursor, cut the selection, caption and headline
+      size, style and position, replace or highlight a caption word, music level
+      and on or off, whoosh, zoom, undo). Free requests wait in a queue served by
+      the person's own Claude Code or Codex agent with agent-inbox, edit-op (a
+      closed, validated set of operations, no path and no shell) and agent-reply,
+      with no paid API key. Each request renders a quick draft, shows its status
+      (queued, applying, done, needs you, failed) and has its own undo; the person
+      approves and finalizes with the full QA.
+    domains: [video, media, content]
+    inputs:
+      - name: edit_spec
+        type: file
+        required: true
+        description: resolved edit spec JSON of the rendered MP4 (the mini editor opens on it)
+    outputs:
+      - name: requests
+        type: file
+        format: json
+        description: <id>.requests.json with every request, its status and the answer
+      - name: feedback
+        type: file
+        format: json
+        description: feedback.json with the operations of each request, tagged with its id
+      - name: drafts_and_final
+        type: file
+        format: mp4
+        description: quick drafts after each request and the final with QA copied to Downloads
+    tools_required: [read, write, bash]
+    invoke: { type: workflow, ref: workflows/live-edit }
+    examples:
+      - quero pedir as mudanças do vídeo escrevendo, tipo tira essa pausa, e ver a IA editando
+      - let me type edit requests next to the video and have my Codex agent apply them
+      - editor com IA no navegador com caixa você pede e linha do tempo com legenda e áudio
+    produces: [edit-requests-queue, edit-review-feedback, retention-edit-mp4, edit-qa-report]
+    keywords:
+      - editor com ia
+      - editor com IA
+      - editor ia
+      - ai editor
+      - ai video editor
+      - você pede
+      - voce pede
+      - a ia edita
+      - ia editando
+      - pedir mudança escrevendo
+      - pedir mudanca escrevendo
+      - type what to change
+      - edit by prompt
+      - prompt edit
+      - tira essa pausa
+      - remove this pause
+      - comandos rápidos
+      - comandos rapidos
+      - quick commands
+      - agent inbox
+      - agent-inbox
+      - fila de pedidos
+      - request queue
+      - meu agente edita
+      - my agent edits
+      - codex edita o vídeo
+      - codex edita o video
+      - claude code edita o vídeo
+      - claude code edita o video
+      - sem chave de api
+      - no api key
+      - faixas da linha do tempo
+      - timeline tracks
+      - editor ao vivo
+      - live editor
+      - editai
+    example_briefs:
+      - Quero um editor com IA no navegador onde eu escrevo tira essa pausa e o agente edita o vídeo na hora
+      - Let me type edit requests like remove this pause or zoom here next to the video and have my own Claude Code agent apply them
+      - a Bianca usa Codex e quer pedir as mudanças do vídeo escrevendo numa caixa, vendo a linha do tempo com legenda, edição e áudio
+      - Open the AI video editor with the request box and the four timeline tracks so my Codex agent edits the reel without an API key
+      - abre o editor ao vivo do vídeo da clínica, quero escrever música mais baixa e zoom aqui e ver a IA editando
+      - Open the EditAi editor so I can type remove this pause next to the video and have my Codex agent apply it
+    not_for:
+      - gerar vídeo com IA
+      - generate ai video
+      - roteiro do zero
+      - live streaming
+      - publicar no instagram
+    acceptance:
+      - id: editai_live_requests_answered
+        description: every request in <id>.requests.json ended feito, precisa, nao-deu or desfeito; none is left aplicando
+        blocking: true
+      - id: editai_live_closed_ops
+        description: every operation in feedback.json ops has a uid and came from a quick command or edit-op; the spec file is unchanged
+        blocking: true
+      - id: editai_live_loopback
+        description: preview_cache/server.json reported a http://127.0.0.1 URL while the session ran and says stopped afterwards
+        blocking: true
+      - id: editai_live_final_qa
+        description: a final made in the page has a QA report that is not FAIL and a Downloads copy with the same sha256
+        blocking: true
+    fidelity:
+      status: experimental
+      threshold: 0.85
+    score_boost: 1.0
+    model_hint: sonnet
+    estimated_cost_usd: 0.15
+
+  - id: video.retention_edit.guided
+    description: >
+      Guided start of an EditAi short-form video edit for any niche (clinic, restaurant,
+      course or class, e-commerce product, real estate, personal brand, wellness
+      UGC): greets a first-time person with a short welcome (what the squad
+      does, reference videos, the mini editor) when the project has no history,
+      reads the video, text or audio transcript the person sent, asks only
+      the missing multiple-choice questions (destination, format, mood, reference,
+      captions and headline; 0 to 5, always with an other option, as clickable
+      AskUserQuestion on Claude Code or a numbered list elsewhere), suggests the
+      edit plan (template, cut pace, caption and headline style, library music by
+      mood, sound effects) and asks for a go-ahead, saves the answers as a client
+      profile in the user's project ("same style as last time?" next time), starts
+      from generic niche profiles, then renders with the retention engine, the
+      measured QA and the mini editor.
+    domains: [video, content, social_media, media]
+    inputs:
+      - name: material
+        type: array
+        required: true
+        description: the clips, photos or screen recordings the person sent
+      - name: message
+        type: string
+        required: false
+        description: what the person wrote, or the transcript of an audio message
+      - name: client
+        type: string
+        required: true
+        description: client or project name; the profile is saved per client in the user's project
+      - name: reference
+        type: string
+        required: false
+        description: reference video file or link whose editing style should be copied
+    outputs:
+      - name: edit_plan
+        type: file
+        format: markdown
+        description: plan.md with the suggested edit, ending in "Posso editar?"
+      - name: client_profile
+        type: file
+        format: json
+        description: editai/profiles/<client>.json in the user's project
+      - name: edited_mp4
+        type: file
+        format: mp4
+        description: the styled edit with spec and QA report
+    tools_required: [read, write, bash]
+    invoke: { type: workflow, ref: workflows/guided-edit }
+    examples:
+      - antes de editar me faz umas perguntas rápidas sobre formato e clima e sugere a edição
+      - ask me a few quick multiple choice questions before editing my client's video
+      - edita o vídeo da clínica com o mesmo estilo da última vez desse cliente
+    produces: [edit-briefing-plan, client-style-profile, retention-edit-mp4, edit-qa-report]
+    keywords:
+      - briefing
+      - briefing guiado
+      - guided briefing
+      - guided edit
+      - edição guiada
+      - edicao guiada
+      - perguntas antes de editar
+      - questions before editing
+      - faz umas perguntas
+      - me pergunta
+      - ask me questions
+      - múltipla escolha
+      - multipla escolha
+      - multiple choice
+      - entender o que eu quero
+      - understand what I want
+      - sugerir antes de editar
+      - suggest before editing
+      - perfil do cliente
+      - perfil de cliente
+      - client profile
+      - mesmo estilo da última vez
+      - mesmo estilo da ultima vez
+      - same style as last time
+      - outros clientes
+      - other clients
+      - qualquer nicho
+      - any niche
+      - nicho
+      - clínica
+      - clinica
+      - restaurante
+      - restaurant
+      - imobiliária
+      - imobiliaria
+      - real estate
+      - infoproduto
+      - e-commerce
+      - marca pessoal
+      - personal brand
+      - onboarding do cliente
+      - client onboarding
+      - editai
+    example_briefs:
+      - Vou mandar o vídeo de um cliente; me faz umas perguntas rápidas sobre formato e clima e sugere a edição antes de executar
+      - Before editing, ask me a few quick multiple choice questions about format, mood and captions, then suggest a plan
+      - edito vídeos para clientes de vários nichos e quero um briefing de perguntas que salva o perfil de cada cliente
+      - edita o vídeo da clínica com o mesmo estilo da última vez desse cliente
+      - Guided edit for a restaurant client, understand what I want with a few clicks and save the client profile
+      - quero editar o vídeo do restaurante, pergunta o que falta e me mostra o plano antes de editar
+      - É minha primeira vez usando o EditAi, me faz as perguntas e sugere a edição do vídeo da clínica
+    not_for:
+      - gerar vídeo com IA
+      - generate ai video
+      - roteiro do zero
+      - live streaming
+    acceptance:
+      - id: editai_guided_questions_bounded
+        description: each briefing round in state.json has at most 5 questions, at most 1 when the message gave destination, format and mood, and every question except the yes/no first-use question has an other option
+        blocking: true
+      - id: editai_guided_first_use
+        description: state.json records first_use; a project with no squad history or a person who says it is the first time gets welcome.md (at most 8 lines) before the first questions, and an ongoing session, a saved profile or a complete request gets no welcome
+        blocking: true
+      - id: editai_guided_plan_confirmed
+        description: plan.md ends with "Posso editar?" and the edit runs only after the confirmation (state.json confirmed true)
+        blocking: true
+      - id: editai_guided_profile_in_project
+        description: editai/profiles/<client>.json and edit.style.json exist in the user's project and nothing was written in the squad folder
+        blocking: true
+      - id: editai_guided_qa
+        description: the final MP4 has a QA report that is not FAIL
+        blocking: true
+    fidelity:
+      status: experimental
+      threshold: 0.85
+    score_boost: 1.0
+    model_hint: sonnet
+    estimated_cost_usd: 0.2
+
+  - id: video.reference_style.extract
+    description: >
+      EditAi copies the editing style of a reference reel or short onto the person's own
+      footage. Takes a local file, a TikTok or YouTube link (yt-dlp) or an
+      Instagram link (only with an Apify token); measures cut pace, zoom at cuts,
+      text and caption position, size and case, fixed headline, sound effects at
+      the turns, music presence and level, palette and framing with editonny's
+      measure_reference helper; saves a style profile JSON in the user's project
+      with an honest list of what the engine cannot reproduce; applies it with a
+      quick draft, the final with measured QA and the mini editor. Copies editing
+      language only, never the speech, music, brand or people of the reference.
+    domains: [video, media, content]
+    inputs:
+      - name: reference
+        type: string
+        required: true
+        description: reference video file, TikTok or YouTube link, or Instagram link with APIFY_TOKEN set
+      - name: material
+        type: array
+        required: false
+        description: the person's own takes to apply the style to
+    outputs:
+      - name: style_profile
+        type: file
+        format: json
+        description: editai/styles/<name>.style.json plus the .style.md report in the user's project
+      - name: edited_mp4
+        type: file
+        format: mp4
+        description: draft, final MP4, spec and QA report with the style applied
+    tools_required: [read, write, bash]
+    invoke: { type: workflow, ref: workflows/reference-style }
+    examples:
+      - copia o estilo de edição desse vídeo de referência e aplica no meu vídeo
+      - copy the editing style of this reference reel onto my footage
+      - quero o meu vídeo editado igual a esse tiktok, mesmo ritmo de corte e legenda
+    produces: [style-profile-json, retention-edit-mp4, edit-qa-report]
+    keywords:
+      - estilo de edição
+      - estilo de edicao
+      - editing style
+      - edit style
+      - copiar o estilo
+      - copy the style
+      - copiar estilo de edição
+      - copiar estilo de edicao
+      - vídeo de referência
+      - video de referencia
+      - reference video
+      - reference reel
+      - referência de estilo
+      - referencia de estilo
+      - style reference
+      - mesmo estilo desse vídeo
+      - mesmo estilo desse video
+      - same style as this video
+      - igual a esse vídeo
+      - igual a esse video
+      - igual a esse tiktok
+      - like this reel
+      - nesse estilo
+      - in this style
+      - perfil de estilo
+      - style profile
+      - template de estilo
+      - style template
+      - medir o estilo
+      - ritmo de corte
+      - cut pace
+      - estilo do criador
+      - creator editing style
+    example_briefs:
+      - Copia o estilo de edição desse vídeo de referência e aplica no vídeo que eu gravei
+      - Copy the editing style of this reference reel onto my talking head footage
+      - quero o meu vídeo editado igual a esse tiktok, com o mesmo ritmo de corte e o mesmo jeito de legenda
+      - Here is a YouTube short whose editing style I love; measure it and use it as a style template for my clip
+      - baixei o vídeo de uma criadora e quero usar como referência de estilo na edição do meu
+    not_for:
+      - análise de concorrentes
+      - competitor analysis
+      - métricas de engajamento
+      - engagement metrics
+      - baixar vídeos em massa
+    acceptance:
+      - id: editai_style_profile_valid
+        description: cli.ts style-check prints valid for the profile, which has the source sha256 and a non-empty not_reproduced list
+        blocking: true
+      - id: editai_style_in_project
+        description: the reference, its measurements and the profile sit in the user's project; the squad folder and the editonny install are unchanged
+        blocking: true
+      - id: editai_style_applied_qa
+        description: each styled final has a QA report that is not FAIL and audio as long as the video
+        blocking: true
+      - id: editai_style_no_content_copied
+        description: the profile's apply block has no words, music path or brand from the reference
+        blocking: true
+    fidelity:
+      status: experimental
+      threshold: 0.85
+    score_boost: 1.0
+    model_hint: sonnet
+    estimated_cost_usd: 0.2
+
+  - id: video.text_hook_batch.execute
+    description: >
+      EditAi renders a batch of short text-on-screen hook videos (no speech) from a list of
+      hooks and one photo or clip per item: fills the text-only template with the
+      exact hook lines, a staggered text entrance, slow push, impact zoom with a
+      hit and a whoosh, fits the text inside Reels and TikTok safe zones and away
+      from the eyes and mouth, renders the items in parallel with ffmpeg and writes
+      per video the MP4, the edit spec, a PNG frame and a measured QA report, plus
+      a batch report. The text is compared verbatim with the source note.
+    domains: [video, social_media, content, media]
+    inputs:
+      - name: hooks
+        type: array
+        required: true
+        description: exact hook lines per item, with the path of the note they came from
+      - name: base_media
+        type: array
+        required: true
+        description: one photo or clip per item (or a default for all)
+    outputs:
+      - name: videos
+        type: file
+        format: mp4
+        description: one 9:16 MP4 per hook, with .spec.json, .png and .qa.md
+      - name: batch_report
+        type: file
+        format: markdown
+        description: batch-report.md with the QA verdict per video
+    tools_required: [read, write, bash]
+    invoke: { type: workflow, ref: workflows/text-hook-batch }
+    examples:
+      - renderize estes 10 ganchos em vídeos curtos só com texto sobre a foto
+      - render these hooks as text-only reels over one photo each
+      - gere em lote os vídeos de gancho escrito para o Reels
+    produces: [text-hook-video-batch, reels-mp4, edit-spec-json, edit-qa-report]
+    keywords:
+      - text only video
+      - text-only reel
+      - vídeo só com texto
+      - video so com texto
+      - só texto na tela
+      - so texto na tela
+      - vídeos em lote
+      - videos em lote
+      - batch render
+      - renderizar em lote
+      - gancho escrito
+      - ganchos escritos
+      - texto sobre a foto
+      - text over photo
+      - text overlay reel
+      - texto animado
+      - animated text
+      - criativo sem fala
+      - no-voice creative
+      - ugc text hook video
+    example_briefs:
+      - Renderiza estes 10 ganchos em vídeos 9x16 só com texto sobre a foto do produto, um MP4 por gancho
+      - Render these hooks as text-only reels over this photo, one MP4 each with animated text and a zoom
+      - quero gerar em lote os criativos sem fala com o gancho escrito na tela e um zoom suave
+      - preciso transformar a lista de ganchos aprovados em vídeos prontos pra postar no Reels e no TikTok
+      - Batch render text overlay videos from a hook list and one background clip per hook
+    not_for:
+      - biblioteca de ganchos
+      - text hook library
+      - escrever ganchos
+      - write the hooks
+      - thumbnail design
+    acceptance:
+      - id: editai_batch_one_per_hook
+        description: one MP4, one spec JSON, one PNG and one QA report exist per input hook
+        blocking: true
+      - id: editai_batch_text_exact
+        description: every QA report has text_exact_hook ok, lines identical to the source note
+        blocking: true
+      - id: editai_batch_ffprobe
+        description: ffprobe confirms 1080x1920, 30 fps and h264 for every MP4
+        blocking: true
+      - id: editai_batch_hooks
+        description: every spec applies at least 2 hooks from references/edit-hooks-catalog.md
+        blocking: true
+      - id: editai_batch_no_fail
+        description: batch-report.md lists no FAIL verdict
+        blocking: true
+    fidelity:
+      status: experimental
+      threshold: 0.85
+    score_boost: 1.0
+    model_hint: sonnet
+    estimated_cost_usd: 0.2
+
+  - id: video.video_creation_pipeline.execute
+    description: >
+      Produces an AI-generated MP4 and edits it for retention in one run: declares
+      duration, platform and aspect as premises, writes script and shot-list.csv
+      with durations snapped to the live engine's legal lengths, routes each shot
+      after probing Grok Imagine, Veo, Kling, Higgsfield, Runway or Luma, generates
+      clips with last-frame to first-frame continuity, lipsyncs when needed, mixes
+      audio, concats with ffmpeg, then hands the master to the EditAi retention edit pass
+      and its measured QA.
+    domains: [video, media, content]
+    invoke: { type: workflow, ref: workflows/video-creation-pipeline }
+    examples:
+      - gere os clipes com IA e já entregue o reel editado com cortes, legenda animada e efeitos sonoros
+      - generate an AI video from this idea and finish it with retention editing
+      - do roteiro ao vídeo editado para retenção, com ganchos visuais
+    produces: [retention-edit-mp4, video-mp4-9x16, edit-decision-list, video-storyboard]
+    outputs:
+      - name: master_mp4
+        type: file
+        format: mp4
+        description: outputs/master.mp4 and outputs/master-edited.mp4
+      - name: audit_report
+        type: file
+        format: markdown
+        description: generation audit plus edit QA report
+    acceptance:
+      - id: pipeline_master_exists
+        description: outputs/master.mp4 exists and ffprobe reports a video stream
+        blocking: true
+      - id: pipeline_shot_durations_legal
+        description: every shot duration_sec is a legal length for its routed engine
+        blocking: true
+      - id: pipeline_routing_probed
+        description: routing-plan.yaml records a probe result and a fallback per shot
+        blocking: true
+      - id: pipeline_retention_pass
+        description: outputs/master-edited.mp4 exists with its edit spec and a QA report that is not FAIL, unless the brief declared the edit pass off
+        blocking: true
+    example_briefs:
+      - Gera os clipes com IA desse roteiro e já me entrega o reel final editado
+      - Generate the AI shots for this script with Veo or Kling and deliver the final reel already edited
+      - quero o vídeo gerado por IA a partir da ideia e já editado, pronto pra postar
+    keywords:
+      - gerado por IA e editado
+      - ai generated and edited
+      - clipes com IA editados
+      - geração mais edição
+      - geracao mais edicao
+      - veo
+      - kling
+      - grok imagine
+      - higgsfield
+    not_for:
+      - live streaming
+      - transmissão ao vivo
+      - real-time avatar
+    fidelity:
+      status: experimental
+    score_boost: 0.9
+
+  - id: video.long_form_multi_shot.execute
+    description: >
+      Produces a 30s+ narrative MP4 from 5 or more AI-generated shots chained with
+      last-frame to first-frame conditioning on dual-keyframe engines (Kling,
+      Higgsfield Seedance, Veo first-last, Luma Ray), refuses joins whose face drift
+      misses the threshold, and finishes with the EditAi retention edit pass and its
+      measured QA.
+    domains: [video, media, content]
+    invoke: { type: workflow, ref: workflows/long-form-multi-shot }
+    examples:
+      - encadeie 8 shots gerados por IA numa narrativa de 60s e edite com quebras de padrão
+      - stitch AI shots into a 90 second story and add retention editing between scenes
+    produces: [retention-edit-mp4, video-mp4-16x9, video-mp4-9x16, video-storyboard]
+    outputs:
+      - name: master_mp4
+        type: file
+        format: mp4
+        description: stitched master plus the retention-edited master
+      - name: continuity_log
+        type: file
+        format: json
+        description: per-join face-drift and lighting-delta measurements
+    acceptance:
+      - id: longform_five_plus_shots
+        description: shot-list.csv contains at least 5 shots and at least one continuity_chain transition
+        blocking: true
+      - id: longform_join_metrics
+        description: continuity-metrics.json has one row per continuity join
+        blocking: true
+      - id: longform_retention_pass
+        description: the edited master exists with its edit spec and a QA report that is not FAIL, unless the brief declared the edit pass off
+        blocking: true
+    example_briefs:
+      - Encadeia 8 cenas geradas por IA numa história de 60s com o mesmo personagem e já entrega editada
+      - Chain AI generated shots into a 90 second story with a consistent character and finish it edited
+      - quero uma narrativa longa gerada por IA que já saia editada com ganchos para não perder audiência no meio
+    keywords:
+      - narrativa gerada por IA editada
+      - long form retention
+      - retenção em vídeo longo
+      - retencao em video longo
+      - cenas encadeadas
+      - chained shots
+    not_for:
+      - single short clip
+      - clipe único curto
+    fidelity:
+      status: experimental
+    score_boost: 0.9
+
+  - id: video.lipsync_refinement.execute
+    description: >
+      Re-syncs lips on existing footage to a new voice track with the live Sync.so
+      model, Hedra or a local tool, keeps the source resolution, measures LSE
+      against the declared tier, and then burns word-by-word captions with the
+      active word highlighted and the EditAi retention edit pass, so a dubbed clip leaves
+      ready for Reels, TikTok or Shorts.
+    domains: [video, media, audio]
+    invoke: { type: workflow, ref: workflows/lipsync-refinement }
+    examples:
+      - dubla este vídeo em inglês, sincroniza os lábios e coloca legenda palavra por palavra
+      - lipsync this dubbed clip and burn animated word captions for Reels
+    produces: [retention-edit-mp4, video-mp4-9x16, video-mp4-16x9]
+    outputs:
+      - name: lipsynced_mp4
+        type: file
+        format: mp4
+        description: lipsynced footage plus the captioned, retention-edited version
+    acceptance:
+      - id: lipsync_source_kept
+        description: lipsynced output width and height equal the source video
+        blocking: true
+      - id: lipsync_lse_within_tier
+        description: measured LSE is at or below the brief's tier threshold
+        blocking: true
+      - id: lipsync_captioned_pass
+        description: the captioned edit exists with its edit spec and a QA report that is not FAIL, unless the brief declared the edit pass off
+        blocking: true
+    example_briefs:
+      - Dubla esse vídeo pra inglês, sincroniza a boca e já coloca legenda palavra por palavra estilo Reels
+      - Lipsync this dubbed clip to the new voice and burn word by word captions with the active word highlighted
+      - quero a versão dublada com lábios sincronizados e legendada pronta pro TikTok
+    keywords:
+      - dublagem com legenda
+      - dubbed with captions
+      - lipsync com legenda
+      - lipsync and captions
+      - legenda queimada
+      - burned captions
+    not_for:
+      - video do zero
+      - new video from brief
+    fidelity:
+      status: experimental
+    score_boost: 0.9
+
+  - id: media.video.compose
+    description: >
+      Composes one finished social clip (reel, UGC ad, product demo, podcast clip)
+      from a brief and an optional hero image by probing live AI engines, applying
+      audio policy and credit discipline, then runs the EditAi retention edit pass and its
+      measured QA on it. A silent website hero loop skips the edit pass.
+    domains: [media, video, social_media, content]
+    invoke: { type: workflow, ref: workflows/video-compose }
+    examples:
+      - gere um anúncio UGC com IA a partir da foto do produto e já edite com texto na abertura e zoom
+      - create one AI clip from this hero image and finish it with a hook text and sound effects
+    produces: [retention-edit-mp4, reels-mp4, video-mp4-9x16]
+    outputs:
+      - name: video_artifact
+        type: file
+        format: mp4
+        description: composed clip and its retention-edited version with handoff.json
+    acceptance:
+      - id: compose_clip_exists
+        description: the composed MP4 exists on disk and ffprobe reports a video stream
+        blocking: true
+      - id: compose_engine_recorded
+        description: handoff names engine_used, the probe that passed, duration and aspect
+        blocking: true
+      - id: compose_retention_pass
+        description: the edited clip exists with its spec and a QA report that is not FAIL, unless the destination is a silent hero loop
+        blocking: true
+    example_briefs:
+      - Gera um anúncio UGC com IA a partir da foto do produto e já entrega editado pro Reels
+      - Create one AI ad clip from this product photo with Veo or Grok and deliver it edited
+      - quero um clipe só, gerado por IA a partir da foto, que já saia editado pro Reels
+    keywords:
+      - anúncio UGC editado
+      - anuncio ugc editado
+      - ugc ad edited
+      - clipe gerado e editado
+      - hook text on ai clip
+    not_for:
+      - scroll-scrub website
+      - site cinematografico
+      - live streaming
+    fidelity:
+      status: experimental
+    score_boost: 0.9
