@@ -30,6 +30,7 @@ Checklist:
   - "on-screen text equals the source character for character"
   - "alignment.text, alignment.visual and alignment.audio are non-empty"
   - "protect_regions has a rectangle when the media shows a face"
+  - "recorded speech went through cli.ts cut (standard cleanup) unless the person switched it off"
 ---
 
 # Plan retention edit
@@ -40,6 +41,7 @@ Checklist:
 - Target platforms (default `instagram_reels`, `tiktok`).
 
 ## Steps
+0. Recorded speech (talking head, lesson, sermon): run the standard cleanup first, `bun lib/edit-engine/cli.ts cut <recordings> --project <dir> --lang <pt|en>` (`--script` for spelling, `--fix` for a misheard word, `--pace natural|reverent` for kept pauses, `--fit N` for "caber em N segundos", `--denoise auto` after a noisy `audio-check`). Read `CORTE.md`; the batch item takes `"cut": "<cut.json>"`. A 16:9 recording for a vertical destination gets `"reframe": {"mode": "follow-face"}` (`"layout": "band"` when the head sits near the top). Skip the cut only when the person asked ("mantém as pausas", "não corta nada").
 1. Pick the template in `templates/edit/` that matches the material (see `templates/edit/README.md`).
 2. Write `slots.json` and run `bun lib/edit-engine/cli.ts from-template <template> slots.json <id>.spec.json`.
 3. Inspect a gridded frame of the main media; set `protect_regions` (eyes and mouth), `text_y`, `focus`.
@@ -57,3 +59,4 @@ Checklist:
 - `alignment.text`, `alignment.visual` and `alignment.audio` are non-empty.
 - When the main media shows a face, `protect_regions` has at least one rectangle.
 - With `broll.mode` other than `off`, every item has a non-empty `quote` and `provenance.source`.
+- With takes from `cli.ts cut`, `CORTE.md` shows 0 edges inside a word, 0 clicks and the cut speech equal to the expected speech.

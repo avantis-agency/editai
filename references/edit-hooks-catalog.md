@@ -53,6 +53,14 @@ Coluna "Motor" diz como o `lib/edit-engine/ffmpeg.ts` executa o gancho. "Manual"
 - **Motor:** `transitions` (J-cut e crossfade em `lib/edit-engine/ffmpeg.ts`, punch-ins gerados por `resolveSpec`, trocados por quadro em intervalo semiaberto); `layers[].transition_in: {type: "dissolve"}` só entre `framing` diferentes, senão o spec é inválido e o QA `no_ghost_dissolve` reprova.
 - **Fonte:** J-cut de 4 quadros com corte de cauda de 2 quadros e fades de 30 ms no `helpers/render_cut.py` do editonny 1.0.0 (lido em 19/10/2026 na instalação local do editonny); rosto fantasma do dissolve entre takes iguais no comparativo A/B interno do autor (19/10/2026) e no veredito dele no mesmo dia; "jump cut" e "zoom change" como mudança visual, Strategia-X (01/07/2026).
 
+### `reframe_follow_face` · Vertical seguindo o rosto
+- **O que é:** uma gravação deitada (16:9) vira 9:16 com um corte que acompanha a pessoa: parado enquanto o rosto fica perto do centro, e uma viagem suave quando ela de fato anda.
+- **Quando usar:** palestra, pregação, aula ou entrevista gravada na horizontal que vai para Reels, TikTok ou Shorts.
+- **Para que serve:** o rosto nunca sai do quadro nem fica colado na borda; o corte central fixo perde a pessoa quando ela anda para o lado.
+- **Padrão:** altura inteira da fonte (o microfone na boca fica), rosto no centro, zona morta de 15% da largura do corte (o alvo é onde a pessoa assenta, mediana de 1 s antes a 3 s depois, então balançar para o lado e voltar não arrasta o quadro), viagem de 0,8 a 1,6 s com curva suave, no máximo uma a cada 1,2 s. `layout: "band"` põe a imagem sob uma faixa no topo (cópia desfocada e escurecida, ou cor lisa) que guarda a headline longe da cabeça.
+- **Motor:** `reframe: {mode: "follow-face", layout: "fill" | "band"}` no spec (`lib/edit-engine/reframe.ts`); o rosto vem do `track_faces.py` do editonny 1.0.0 a 10 Hz, por subprocesso; sem editonny, corte central e o QA avisa. QA: `reframe_face` (toda amostra medida do rosto dentro do corte) e `reframe_motion`.
+- **Fonte:** `helpers/track_faces.py` do editonny 1.0.0 (MIT, Matheus Gomes: mediana de 5, zona morta de 3%, movimento de 0,5 s), lido em 25/10/2026; a câmera virtual mais calma por cima é do EditAi.
+
 ### `pattern_break` · Quebra de padrão
 - **O que é:** mudança brusca de cor, layout, enquadramento ou ritmo: flash branco de 2 a 4 quadros, tela que vira dividida, corte para a tela do app.
 - **Quando usar:** quando o vídeo repete o mesmo tipo de plano por mais de 4 s; na entrada da "holding zone" (3 a 10 s).

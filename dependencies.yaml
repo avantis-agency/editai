@@ -61,6 +61,17 @@ system:
 # install. On Windows a 1.1.x install counts as absent (soumatheusgomes/editonny#7).
 # Without editonny: exit 3, only the client media in <project>/editai/broll/ enters.
 
+# Optional measured cut, audio check, denoise and face-following reframe, since 2.2.0:
+#   bun lib/edit-engine/cli.ts cut <recordings> --project <dir>   (also audio-check, reframe)
+# call editonny 1.0.0's transcribe_batch.py / transcribe.py, pack_transcripts.py,
+# assemble_cut.py, waveform_cut.py, precise_edges.py, render_cut.py, verify_cut.py,
+# audit_cut.py, align_words.py and noise_check.py the same way, and its denoise.py and
+# track_faces.py modules through `python -B -c` (both are libraries, no CLI). Every file they
+# write goes to <project>/editai/cut/, <project>/editai/cache/ or next to the render; nothing
+# goes into the install. Without editonny: cut exits 3 (takes by hand, as before), the reframe
+# is a centre crop and the QA says the face was not measured; the breaths_remaining QA and the
+# SRT/VTT export are EditAi's own (Bun) and always work.
+
 # Optional desktop editor (not installed by activation): Concat 0.2.7+, for
 #   bun lib/edit-engine/cli.ts concat <spec.json> --project-dir <dir under home>
 # which builds a Concat project to adjust by hand. The app must be open with its
@@ -85,7 +96,7 @@ env_vars:
 
   - name: EDITONNY_ENGINE
     required: false
-    description: "Optional. Path to the editonny engine folder (default ~/.local/share/editonny/engine) for cli.ts transcribe, style-extract and the B-roll cards (broll-suggest, broll-render). Absent: supply word timings another way; B-roll uses the client media only."
+    description: "Optional. Path to the editonny engine folder (default ~/.local/share/editonny/engine) for cli.ts transcribe, style-extract, the B-roll cards (broll-suggest, broll-render), the measured cut (cut, audio-check) and the face-following reframe. Absent: supply word timings another way; B-roll uses the client media only; cut exits 3; reframe is a centre crop."
 
   - name: EDITAI_EDITONNY_ANY_VERSION
     required: false

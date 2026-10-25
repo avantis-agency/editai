@@ -1,5 +1,5 @@
 name: editai
-version: 2.1.0
+version: 2.2.0
 protocol: "6.0"
 description: >
   EditAi (a play on "edita aí" and "Edit AI").
@@ -12,7 +12,11 @@ description: >
   music ducked under the voice, silence before the turn), adds automatic B-roll
   to a talking head (the client's own media matched to spoken words and animated
   cards from the installed editonny 1.0.0, placed off the face, the headline and
-  the captions), writes a JSON edit spec, renders it with ffmpeg and libass, and
+  the captions), cleans raw recorded speech by default with a measured cut (pauses,
+  breaths, false starts and repeated takes out on waveform edges, emphasis kept, a
+  "fit in N seconds" request, verified for words cut at the joins and retranscribed,
+  optional denoise), reframes a 16:9 recording into 9:16 following the face, exports
+  SRT and VTT, writes a JSON edit spec, renders it with ffmpeg and libass, and
   measures the result: platform safe zones on the real text bounding box, text
   size and dwell time, loudness at -14 LUFS, codec and frame rate. Ships a CC0
   music (by mood) and sound-effect starter kit with per-item licenses and pulls
@@ -138,7 +142,11 @@ capabilities:
       music drop, background music ducked under the voice), adds automatic
       B-roll to a talking head (client media matched to spoken words, animated
       cards for prices, counts, lists, steps and offers from the installed
-      editonny 1.0.0, never over eyes, mouth, headline or captions), writes the JSON
+      editonny 1.0.0, never over eyes, mouth, headline or captions), cleans raw
+      recorded speech by default (measured cut: pauses, breaths, false starts and
+      repeated takes out without cutting a word, emphasis kept, fit in N seconds,
+      verify_cut and audit_cut proof, optional denoise), reframes a 16:9 recording into
+      9:16 following the face, exports SRT and VTT, writes the JSON
       edit spec, renders it with ffmpeg and libass, and runs a measured QA:
       text bounding box against Reels, TikTok, Shorts and Facebook Reels safe
       zones, font size floor, dwell time, eyes and mouth kept clear, -14 LUFS and
@@ -256,6 +264,9 @@ capabilities:
       - coloca b-roll automático no meu talking head, com as fotos que eu mandei e cards animados quando eu falo preço e número
       - quero que ele crie os b-rolls sozinho nesse vídeo falado, com a mídia do cliente na hora que eu cito
       - Add automatic B-roll to my talking head video, with my own clips and animated cards when I say a price or a number
+      - tira as pausas, os erros e as repetições desse vídeo que eu gravei sem cortar palavra e põe legenda
+      - edita essa pregação gravada deitada em vídeo vertical para Reels seguindo o rosto, com legenda e headline fixa
+      - Clean up my raw talking head recording, cut the pauses and false starts, and fit it in 45 seconds with captions
     not_for:
       - gerar vídeo com IA
       - generate ai video
@@ -284,6 +295,12 @@ capabilities:
         blocking: true
       - id: editai_edit_broll_qa
         description: with broll.mode other than off, the QA checks broll_hook_window, broll_face, broll_caption_overlap, broll_safe_zone, broll_quote and broll_provenance pass, and the same spec with mode off renders the same bytes as without the broll section
+        blocking: true
+      - id: editai_edit_measured_cut
+        description: when the takes come from cli.ts cut (spec.cut), the cut report shows verify_cut with 0 edges inside a word and 0 clicks and audit_cut speech equal to the expected speech, and the QA check breaths_remaining passes (no silence of 0.25 s or more outside the declared holds)
+        blocking: true
+      - id: editai_edit_reframe_face
+        description: with reframe mode follow-face and the face measured, the QA check reframe_face passes (every measured face sample of every take inside the crop window); without editonny the QA reports the face as not measured
         blocking: true
     fidelity:
       status: experimental

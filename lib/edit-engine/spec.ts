@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { pickSfx, pickTrack, synthAnchor } from "./library.ts";
 import { resolveBroll, validateBroll, type BrollSpec } from "./broll.ts";
+import { validateReframe, type ReframeSpec } from "./reframe.ts";
 
 export type Platform = "instagram_reels" | "tiktok" | "youtube_shorts" | "facebook_reels";
 export type Animation = "none" | "fade" | "pop_in" | "slide_up" | "line_stagger" | "word_reveal";
@@ -33,6 +34,9 @@ export interface MediaLayer {
   broll?: string;         // the broll item id it comes from
   alpha?: boolean;
   provenance?: Record<string, unknown>;
+  // Cleaned voice (2.2.0): a WAV with the same timeline as `src` (cli.ts cut --denoise, editonny denoise.py);
+  // the take keeps its picture from `src` and takes its audio from here.
+  audio_src?: string;
 }
 
 /**
@@ -145,6 +149,19 @@ export interface AudioSpec {
   voice_cleanup?: { highpass_hz?: number };  // high-pass on each layer's own audio before the mix (removes room rumble)
 }
 
+/**
+ * The measured cut a talking head came from (2.2.0, lib/edit-engine/cut.ts). `holds` are the pauses the
+ * cut kept on purpose (pace, or a pause the person asked for), on the timeline: the breaths_remaining QA
+ * excuses a silence inside one of them up to `max_s`. `end_hold_s` is the still tail after the last word.
+ */
+export interface CutInfo {
+  file?: string;
+  pace?: string;
+  holds: { start: number; end: number; max_s: number; why: string }[];
+  end_hold_s?: number;
+  verify?: Record<string, unknown>;
+}
+
 export interface HookApplied { hook: string; at: number; why: string; broll?: string }
 
 export interface EditSpec {
@@ -170,6 +187,10 @@ export interface EditSpec {
   notes?: string[];
   /** Automatic B-roll (2.1.0, lib/edit-engine/broll.ts). Absent or mode "off": the render is the same as before. */
   broll?: BrollSpec;
+  /** Measured cut (2.2.0): the pauses kept on purpose, for the breaths_remaining QA. Absent: the QA only reports. */
+  cut?: CutInfo;
+  /** Reframe a wider source into the canvas (2.2.0, lib/edit-engine/reframe.ts). Absent or mode "off": as before. */
+  reframe?: ReframeSpec;
 }
 
 export class SpecError extends Error {}
@@ -191,6 +212,7 @@ export function validateSpec(s: EditSpec): string[] {
     if (!num(l.start) || !num(l.duration) || l.duration <= 0) p.push(`layer ${l.id}: start/duration invalid`);
     if (l.start + l.duration > s.duration + 1e-6) p.push(`layer ${l.id}: ends after the video`);
     if (l.speed !== undefined && (l.speed <= 0 || l.speed > 4)) p.push(`layer ${l.id}: speed must be in (0, 4]`);
+    if (l.audio_src !== undefined && !existsSync(l.audio_src)) p.push(`layer ${l.id}: audio_src not found: ${l.audio_src}`);
   }
   for (const t of s.texts ?? []) {
     if (!t.lines?.length) p.push(`text ${t.id}: no lines`);
@@ -229,6 +251,8 @@ export function validateSpec(s: EditSpec): string[] {
   if (!s.hooks_applied?.length) p.push("hooks_applied is empty: name the catalog hooks this spec uses");
   if (!s.alignment?.text || !s.alignment?.visual || !s.alignment?.audio) p.push("alignment needs text, visual and audio");
   p.push(...validateBroll(s));
+  p.push(...validateReframe(s));
+  for (const h of s.cut?.holds ?? []) if (!(h.end > h.start) || !(h.max_s > 0)) p.push("cut.holds: every hold needs start < end and max_s > 0");
   return p;
 }
 
@@ -319,7 +343,7 @@ export function loadSpec(path: string): EditSpec {
   const raw = JSON.parse(readFileSync(path, "utf8")) as EditSpec;
   const base = dirname(resolve(path));
   const abs = (p: string) => (isAbsolute(p) || p.startsWith("@") ? p : resolve(base, p));
-  for (const l of raw.layers ?? []) l.src = abs(l.src);
+  for (const l of raw.layers ?? []) { l.src = abs(l.src); if (l.audio_src) l.audio_src = abs(l.audio_src); }
   for (const f of raw.audio?.sfx ?? []) f.src = abs(f.src);
   if (typeof raw.audio?.music === "string") raw.audio.music = { path: raw.audio.music };
   if (raw.audio?.music?.path) raw.audio.music.path = abs(raw.audio.music.path);

@@ -8,7 +8,7 @@
 
 **EditAi** (de "edita aí" e de "Edit AI") é um estúdio de edição de retenção para vídeo curto, como squad do Nirvana-OS. Você entra com clipe, foto ou gravação de tela e sai com um MP4 9:16 (1080x1920, H.264, 30 fps) editado com ganchos de catálogo. Junto vêm o edit spec JSON que gerou o vídeo e um relatório de QA medido: áreas seguras das plataformas, tamanho e tempo de texto, -14 LUFS, codec. Ele também mantém os pipelines de geração com IA herdados do `nirvana-video-creator`, todos terminando no mesmo passe de edição. Serve para qualquer nicho: clínica, restaurante, loja, curso, imobiliária, marca pessoal.
 
-Versão 2.1.0. Protocolo de squad 6.0. Prefixo `editai`. Cerca de 25 MB. A 2.1.0 traz o B-roll automático (onda 1 da fusão com o editonny). A 2.0.0 trocou o nome, a pasta do squad, a pasta no seu projeto e o cache; projetos e downloads de antes continuam funcionando (veja a entrada 2.0.0 do CHANGELOG).
+Versão 2.2.0. Protocolo de squad 6.0. Prefixo `editai`. Cerca de 25 MB. A 2.2.0 traz o corte medido com a limpeza padrão (onda 2 da fusão com o editonny) e a gravação deitada em vertical seguindo o rosto; a 2.1.0 trouxe o B-roll automático (onda 1). A 2.0.0 trocou o nome, a pasta do squad, a pasta no seu projeto e o cache; projetos e downloads de antes continuam funcionando (veja a entrada 2.0.0 do CHANGELOG).
 
 ### Instalar
 
@@ -126,7 +126,7 @@ bun lib/edit-engine/cli.ts edit-op vs.spec.json op.json               # o agente
 bun lib/edit-engine/cli.ts agent-reply vs.spec.json p3 --status feito --message "Zoom em 00:03.6"
 ```
 
-Outros: `broll-suggest` e `broll-render` (B-roll automático, abaixo), `library` (lista músicas e efeitos e marca o que é kit e o que falta baixar), `library pull`, `placeholder-screen`, `concat`, `transcribe`, `validate`, `sfx-synth`, `profiles`, `style-extract`, `style-check`. A lista completa está no topo de `lib/edit-engine/cli.ts`.
+Outros: `cut`, `audio-check`, `subtitles` e `reframe` (corte medido e vertical seguindo o rosto, abaixo), `broll-suggest` e `broll-render` (B-roll automático, abaixo), `library` (lista músicas e efeitos e marca o que é kit e o que falta baixar), `library pull`, `placeholder-screen`, `concat`, `transcribe`, `validate`, `sfx-synth`, `profiles`, `style-extract`, `style-check`. A lista completa está no topo de `lib/edit-engine/cli.ts`.
 
 ### B-roll automático
 
@@ -152,6 +152,29 @@ Num talking head, o EditAi põe B-roll sozinho: a foto ou o vídeo que o cliente
 **Sem editonny**, ou com a 1.1.x no Windows, o `broll-suggest` sai com código 3, só a mídia da pasta entra e o vídeo renderiza com os ganchos de sempre; o `doctor` mostra "B-roll de cards: indisponível". Sem a pasta de mídia, só cards. Com `"mode": "off"`, o render é o mesmo de antes, byte a byte.
 
 **Limites conhecidos.** Os detectores do editonny 1.0.0 foram escritos para português: em inglês eles quase não acham momentos sozinhos (na fala de teste não acharam nenhum), então peça "põe um card aqui" onde quiser um card. Alguns rótulos fixos dos cards vêm em inglês do editonny ("only", "What you receive"); com fala em português o EditAi troca por "apenas" e "Você recebe". Num selfie com o rosto no centro, uma lista longa pode não caber entre o rosto e a borda de baixo da tela; ela fica fora, com o motivo no relatório.
+
+### Corte medido e limpeza padrão
+
+Toda edição completa de fala gravada sai limpa sem você pedir: pausas longas, respirações, erros, falsos começos e repetições saem; palavra inteira, ritmo natural, pausa de propósito e o sentido ficam. Uma frase dita de novo logo em seguida, palavra por palavra, é ênfase e fica. Só o seu pedido muda isso ("mantém as pausas", "não corta nada").
+
+```bash
+bun lib/edit-engine/cli.ts audio-check bruto.mp4                     # ruído, clipping e eco antes de editar
+bun lib/edit-engine/cli.ts cut <pasta das gravações> --project <pasta do projeto> --lang pt
+#   --script fala.txt          a grafia certa, palavra por palavra (nunca acrescenta fala)
+#   --fix "kiwifai=Kiwify"     o que o transcritor ouve errado
+#   --pace natural|reverent    deixa uma pausa curta depois de frase (e de vírgula, no reverente)
+#   --fit 45                   "caber em 45 segundos": tira primeiro as repetições, depois os desvios marcados, depois as pausas
+#   --denoise auto             limpa o ruído de fundo da voz se o diagnóstico pedir (light ou strong também)
+#   --plan plano.json          o que o agente decidiu: {"keep": [{"text": "..."}], "drop": [...], "optional": [...]}
+```
+
+Ele grava `<projeto>/editai/cut/<nome>/CORTE.md`, com o rascunho automático e o corte final lado a lado, o que saiu (com tempos e o porquê), as pausas mantidas e a prova: `verify_cut` (palavra cortada na junção, clique) e `audit_cut` (o corte retranscrito e comparado com a fala esperada). No lote do `th-batch`, o item recebe `"cut": "<pasta>/cut.json"` e o QA passa a bloquear qualquer silêncio de 0,25 s ou mais fora das pausas pedidas (`breaths_remaining`). Saída 3 = sem editonny (os takes voltam a ser marcados à mão); saída 4 = não coube em N segundos (a lista de candidatos está no relatório).
+
+Legenda em arquivo: `bun lib/edit-engine/cli.ts subtitles video.spec.json` grava `video.srt` e `video.vtt` com as mesmas palavras da legenda do vídeo e confere os dois. O `th-batch` já grava os dois ao lado de cada MP4.
+
+### Gravação deitada em vertical, seguindo o rosto
+
+Uma palestra, aula ou pregação gravada em 16:9 vira 9:16 com `"reframe": {"mode": "follow-face"}` no spec ou no item do lote. O rosto é medido 10 vezes por segundo (`track_faces.py` do editonny) e o quadro fica parado enquanto a pessoa balança perto do centro; quando ela anda de verdade, ele viaja com calma até onde ela assenta. A altura da gravação é inteira (o microfone na boca fica). Com `"layout": "band"`, a imagem desce e o topo vira uma faixa desfocada (ou de cor lisa, `"band_style": "solid"`) onde a headline fica longe da cabeça. O QA confere cada amostra do rosto dentro do corte (`reframe_face`); sem editonny, o corte é central e o QA avisa.
 
 ### Música e efeitos sonoros
 
@@ -260,7 +283,7 @@ Live streaming, avatar em tempo real, escrever os ganchos (isso fica com um squa
 
 **EditAi** (from the Portuguese "edita aí", roughly "go ahead, edit it", and from "Edit AI") is a retention-editing studio for short-form video, packaged as a Nirvana-OS squad. Give it a clip, a photo or a screen recording and it returns a 9:16 MP4 (1080x1920, H.264, 30 fps) edited with catalogued hooks. With it come the JSON edit spec that produced the video and a measured QA report: platform safe zones, text size and dwell time, -14 LUFS, codec. It also keeps the AI generation pipelines inherited from `nirvana-video-creator`, all ending in the same edit pass. It fits any niche: clinic, restaurant, shop, course, real estate, personal brand.
 
-Version 2.1.0. Squad protocol 6.0. Prefix `editai`. About 25 MB. Version 2.1.0 adds automatic B-roll (wave 1 of the editonny fusion). Version 2.0.0 changed the name, the squad folder, the folder in your project and the cache; projects and downloads from before keep working (see the 2.0.0 entry in the CHANGELOG).
+Version 2.2.0. Squad protocol 6.0. Prefix `editai`. About 25 MB. Version 2.2.0 adds the measured cut with standard cleanup (wave 2 of the editonny fusion) and landscape-to-vertical reframing that follows the face; 2.1.0 added automatic B-roll (wave 1). Version 2.0.0 changed the name, the squad folder, the folder in your project and the cache; projects and downloads from before keep working (see the 2.0.0 entry in the CHANGELOG).
 
 ### Install
 
@@ -318,6 +341,14 @@ On a talking head EditAi adds B-roll by itself: the client's own photo or video 
 Rules: nothing in the first 3 s or the last 2.5 s; at most one item every 6 s (4 to 6 in a 45 to 60 s video); real client media beats a card on the same stretch; never over eyes and mouth (editonny's `face_layout.py`, or the spec's `protect_regions`), the headline, the captions or the platform UI; a card's value comes from the speech or the card is dropped; a card that writes the spoken words hides the caption only while it is on screen. Blocking QA: `broll_hook_window`, `broll_face`, `broll_caption_overlap`, `broll_safe_zone`, `broll_quote`, `broll_provenance`. The mini editor gets a B-roll track and three quick commands: "tira esse b-roll", "põe um card aqui", "b-roll mais curto" (English forms work too).
 
 From editonny 1.0.0, by subprocess and nothing copied: moment detection (`suggest_visuals.py`), card drawing (`render_visuals.py`, alpha `.mov` cached in `<project>/editai/cache/broll/`) and face position (`face_layout.py`). Without editonny, or with 1.1.x on Windows, `broll-suggest` exits 3, only the client media enters and the video still renders; with `"mode": "off"` the render is the one from before, byte for byte. Known limits: editonny 1.0.0's detectors are written for Portuguese and find almost nothing in English speech on their own (use "põe um card aqui"); a few fixed card words come from editonny in English and are switched to Portuguese for Portuguese speech; on a centred selfie a long list may not fit under the face and stays out with the reason in the report.
+
+### Measured cut and standard cleanup
+
+Every full edit of recorded speech is cleaned without being asked: long pauses, breaths, mistakes, false starts and repetitions go; whole words, natural pacing, intentional pauses and the meaning stay. A sentence said again right away, word for word, is emphasis and stays. Only the person's request changes this. `cli.ts audio-check <clips>` measures noise, clipping and echo first; `cli.ts cut <recordings> --project <dir> --lang en` runs editonny 1.0.0's draft, waveform edges, `verify_cut` and `audit_cut` (options: `--script` for spelling, `--fix "heard=right"`, `--pace natural|reverent`, `--fit N` for "fit in N seconds", `--denoise auto|light|strong`, `--plan` for the agent's keep/drop/optional decisions) and writes `<project>/editai/cut/<name>/CORTE.md` with the draft and the final side by side, what came out and why, the kept pauses and the proof. In a `th-batch` item, `"cut": "<cut.json>"` brings the takes, the measured words and the kept pauses, and the QA then blocks any other silence of 0.25 s or more (`breaths_remaining`). Exit 3 = no editonny; exit 4 = it does not fit in N seconds. `cli.ts subtitles <spec>` writes a checked SRT and VTT from the same caption words (`th-batch` writes them by itself).
+
+### Landscape recording to vertical, following the face
+
+`"reframe": {"mode": "follow-face"}` turns a 16:9 talk, lesson or sermon into 9:16: editonny's `track_faces.py` measures the face 10 times a second, and the frame stands still while the person sways near the centre and travels calmly when they really move. Full source height (a hand microphone stays in). `"layout": "band"` lowers the picture under a blurred (or solid) top band that holds the headline away from the head. QA `reframe_face` checks every face sample inside the crop; without editonny it is a centre crop and the QA says so.
 
 ### Music and sound effects
 

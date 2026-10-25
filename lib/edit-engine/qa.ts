@@ -11,6 +11,8 @@ import { zoomAt } from "./ffmpeg.ts";
 import { assSize } from "./fonts.ts";
 import { adjacent, ghostDissolves, resolveSpec, SQUAD_ROOT, takes, type EditSpec, type Rect } from "./spec.ts";
 import { brollChecks, brollOn, contactSheet } from "./broll.ts";
+import { breathsRemaining } from "./silence.ts";
+import { reframeChecks } from "./reframe.ts";
 
 /** Distinct zoom values (3 decimals) the camera reaches between two timeline seconds. */
 function zoomsDuring(spec: EditSpec, s: number, e: number): number[] {
@@ -126,6 +128,9 @@ export function runQa(spec: EditSpec, video: string, opts: { reportDir?: string;
     measured.broll_items = spec.broll!.items.map((i) => ({ id: i.id, kind: i.kind, template: i.template ?? null, src: i.src ?? null, start: i.start, end: i.end, captions: i.captions ?? "keep", quote: i.quote, ink: i.clip?.ink ?? null }));
   }
 
+  // 2c. reframe (2.2.0): every measured face sample inside the crop window; the camera's motion
+  for (const c of reframeChecks(spec)) add(c);
+
   // 3. legibility and dwell time
   const scale = H / 1920;
   for (const t of spec.texts) {
@@ -205,6 +210,19 @@ export function runQa(spec: EditSpec, video: string, opts: { reportDir?: string;
       detail: `music ${mm.below_voice_db} LU under the voice${want !== undefined ? ` (asked ${want})` : ""}, gain ${mm.gain_db} dB`, tool: "ffmpeg ebur128 on the render stems" });
     add({ id: "music_ducking", blocking: false, pass: mm.duck_integrated_db >= 3,
       detail: `ducked bed ${mm.duck_integrated_db} LU under the dry bed (cap ${mm.duck_db_max} dB under speech)`, tool: "ffmpeg sidechaincompress + ebur128" });
+  }
+  // 4b. remaining silence (2.2.0, matrix 3.6): the voice of the spec alone, every silence of 0.25 s or more.
+  // With a measured cut (spec.cut) only its declared holds and the end hold may remain, and the check blocks;
+  // takes chosen by hand only get the list (the person may have wanted those pauses).
+  const br = breathsRemaining(spec, work);
+  if (br) {
+    measured.breaths = br;
+    const kept = br.found.filter((x) => x.why);
+    const list = (xs: { start: number; end: number; dur: number }[]) => xs.slice(0, 6).map((x) => `${x.start.toFixed(2)}-${x.end.toFixed(2)} s (${x.dur.toFixed(2)} s)`).join(", ");
+    add({ id: "breaths_remaining", blocking: !!spec.cut, info: !spec.cut, pass: br.unintended.length === 0,
+      detail: (br.unintended.length ? `${br.unintended.length} silêncio(s) de ${br.min_s} s ou mais que ninguém pediu: ${list(br.unintended)}` : `nenhum silêncio de ${br.min_s} s ou mais fora das pausas pedidas`) +
+        (kept.length ? `; ${kept.length} pedido(s): ${kept.slice(0, 6).map((x) => `${x.start.toFixed(2)} s ${x.why}`).join(", ")}` : "") + (spec.cut ? "" : " (sem corte medido: só informa)"),
+      tool: `voz do spec renderizada sozinha, janelas de 10 ms abaixo de ${br.threshold_db} dB (regra do breaths.py / waveform_cut do editonny, portada em Bun)` });
   }
   measured.av_duration = { video: pr.duration, audio: pr.audio_duration };
   if (pr.audio_duration !== null) {

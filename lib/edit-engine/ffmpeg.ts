@@ -8,6 +8,7 @@ import { ffmpeg, fontsDirFor, hasAudio, loudness } from "./measure.ts";
 import { fitTexts, type FitLog } from "./safezones.ts";
 import { adjacent, assertValid, musicPath, sfxStart, takes, type CameraMove, type EditSpec, type MediaLayer } from "./spec.ts";
 import { materializeBroll } from "./broll.ts";
+import { materializeReframe, reframeChain } from "./reframe.ts";
 
 const f3 = (n: number) => Number(n.toFixed(3)).toString();
 const SS = 2; // zoompan supersampling, limits sub-pixel jitter on slow pushes
@@ -134,7 +135,7 @@ export function planLayers(spec: EditSpec): Map<MediaLayer, LayerPlan> {
   const xf = (tr?.audio_xfade_ms ?? 0) / 1000;
   const plans = new Map<MediaLayer, LayerPlan>();
   for (const l of spec.layers) {
-    const audible = !!l.audio && (l.speed ?? 1) === 1 && l.kind === "video" && hasAudio(l.src);
+    const audible = !!l.audio && (l.speed ?? 1) === 1 && l.kind === "video" && hasAudio(l.audio_src ?? l.src);
     plans.set(l, { vLead: 0, aLead: 0, lead: 0, audible, aStart: l.start, aEnd: l.start + l.duration, fadeIn: 0, fadeOut: 0 });
   }
   const tk = takes(spec);
@@ -206,6 +207,8 @@ export async function render(spec: EditSpec, outMp4: string, opts: RenderOptions
   const outDir = dirname(out);
   // B-roll: cards without a current clip are drawn (editonny), marks become cards; nothing when absent or "off"
   if (spec.broll && spec.broll.mode !== "off") { stageOf(opts)("broll"); materializeBroll(spec, join(outDir, ".editai-broll-cache")); }
+  // reframe (2.2.0): the face path of each wider source (editonny track_faces), cached; nothing when absent or "off"
+  if (spec.reframe && spec.reframe.mode !== "off") { stageOf(opts)("reframe"); materializeReframe(spec, join(outDir, ".editai-reframe-cache")); }
   assertValid(spec);
   const work = join(outDir, `.work-${spec.id}`);
   mkdirSync(work, { recursive: true });
@@ -244,13 +247,21 @@ export async function render(spec: EditSpec, outMp4: string, opts: RenderOptions
     // placed on whole output frames: an offset in seconds (5.3333/TB = 159.9999) is truncated by setpts,
     // which put the layer one frame early and left a black frame before the next take (seen in the 1.0 renders)
     const F0 = Math.round((l.start - p.vLead) * fps), F1 = Math.round((l.start + l.duration) * fps);
-    graph.push(`[${input}:v]${head}${fitChain(l, r.w, r.h)},setsar=1,format=yuv420p${pad}${dissolve},` +
+    const src0 = (l.in ?? 0) - p.vLead;
+    const fit = (l.kind === "video" && !l.rect && reframeChain(spec, l, i, src0, src0, (l.in ?? 0) + l.duration * speed)) || fitChain(l, r.w, r.h);
+    graph.push(`[${input}:v]${head}${fit},setsar=1,format=yuv420p${pad}${dissolve},` +
       `tpad=stop_mode=clone:stop_duration=${f3(vDur)},trim=end_frame=${F1 - F0},settb=1/${fps},setpts=PTS-STARTPTS+${F0}[L${i}]`);
     graph.push(`[${cur}][L${i}]overlay=x=${r.x - b}:y=${r.y - b}:eof_action=pass:enable='between(n,${F0},${F1 - 1})'[V${i}]`);
     cur = `V${i}`;
     if (p.audible) {
       // zero-latency cleanup only (afftdn was tried and delays the voice ~30 ms against the picture)
-      audioLayers.push(layerAudioChain(spec, l, p, input, `A${i}`));
+      let ain = input;
+      if (l.audio_src) {
+        // cleaned voice (2.2.0, cli.ts cut --denoise): same timeline as the video, opened at the same second
+        args.push("-ss", f3((l.in ?? 0) - p.lead), "-t", f3(p.lead + l.duration * speed + tail + 0.5), "-i", l.audio_src);
+        ain = ++input;
+      }
+      audioLayers.push(layerAudioChain(spec, l, p, ain, `A${i}`));
       layerAudio.push(`A${i}`);
     }
     input++;

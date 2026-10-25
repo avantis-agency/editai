@@ -9,6 +9,11 @@
 //   bun lib/edit-engine/cli.ts transcribe <video> <out.json> [lang]  optional local word timings (editonny faster-whisper)
 //   bun lib/edit-engine/cli.ts broll-suggest <spec.json> [--project DIR] [--out F]   automatic B-roll: client media by spoken word + editonny cards (exit 3: no editonny, media only)
 //   bun lib/edit-engine/cli.ts broll-render <spec.json> [--project DIR] [--out F]    draw the cards (editonny render_visuals) into the project cache
+//   bun lib/edit-engine/cli.ts cut <folder|video...> [--project DIR] [--name N] [--lang pt] [--script F] [--fix "a=b"] [--plan F] [--pace tight|natural|reverent] [--fit N] [--denoise off|auto|light|strong] [--no-audit]
+//                                                                    measured cut + standard cleanup (editonny, exit 3 without it; 4 = does not fit N s)
+//   bun lib/edit-engine/cli.ts audio-check <video...> [--project DIR]  noise, clipping and echo before editing (editonny noise_check)
+//   bun lib/edit-engine/cli.ts subtitles <spec.json> [--out-dir DIR]   SRT + VTT from the caption words, checked
+//   bun lib/edit-engine/cli.ts reframe <spec.json> [--project DIR] [--out F]   measure the face path of wider sources (spec.reframe follow-face)
 //   bun lib/edit-engine/cli.ts preview <spec.json> [--video out.mp4] [--port 4840] [--open] [--final-name "Nome"] [--downloads DIR]   mini editor on 127.0.0.1
 //   bun lib/edit-engine/cli.ts preview <spec.json> --stop            stop the preview of this spec
 //   bun lib/edit-engine/cli.ts apply-feedback <spec.json> <feedback.json> [--out-dir DIR] [--no-render]
@@ -29,7 +34,7 @@
 //   bun lib/edit-engine/cli.ts style-check <style.json>              validate a hand-reviewed profile and rewrite its .md report
 //   bun lib/edit-engine/cli.ts style-apply <style.json> <th-batch.json> [--review] [--no-draft]   quick draft, final + QA, mini editor
 import { existsSync, readdirSync, writeFileSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { runBatch } from "./batch.ts";
 import { render } from "./ffmpeg.ts";
 import { runQa } from "./qa.ts";
@@ -49,6 +54,10 @@ import { extractStyle, loadStyle, styleReport } from "./style.ts";
 import { APP_DIR, appRoots, projectDir } from "./project.ts";
 import { agentInbox, sendCommand, serverFor } from "./live.ts";
 import { materializeBroll, suggestBroll } from "./broll.ts";
+import { parseFix, runCut, type Pace } from "./cut.ts";
+import { noiseCheck } from "./denoise.ts";
+import { checkSubtitles, exportSubtitles } from "./subtitles.ts";
+import { materializeReframe, reframeChecks } from "./reframe.ts";
 
 const argv = process.argv.slice(2);
 /** Removes `--name [value]` from argv; undefined when absent, "" when given without a value. */
@@ -129,6 +138,64 @@ if (cmd === "agent-inbox" || cmd === "edit-op" || cmd === "agent-reply") {
   for (const n of b.notes ?? []) console.log(`  nota    ${n}`);
   console.log(`spec: ${out}`);
   process.exit(code);
+} else if (cmd === "cut") {
+  const o = { project: flag("--project"), name: flag("--name"), lang: flag("--lang"), script: flag("--script"), fix: flag("--fix"), plan: flag("--plan"), pace: flag("--pace"),
+    fit: flag("--fit"), denoise: flag("--denoise"), prompt: flag("--prompt"), noAudit: flag("--no-audit") !== undefined, dryRun: flag("--dry-run") !== undefined };
+  const inputs = argv.slice(1);
+  if (!inputs.length) usage();
+  if (o.pace && !["tight", "natural", "reverent"].includes(o.pace)) { console.error("--pace tight|natural|reverent"); process.exit(2); }
+  if (o.denoise && !["off", "auto", "light", "strong"].includes(o.denoise)) { console.error("--denoise off|auto|light|strong"); process.exit(2); }
+  const script = o.script ? (existsSync(o.script) ? readFileSync(o.script, "utf8") : o.script) : undefined;
+  const r = await runCut({ inputs, project: projectDir(o.project || undefined), name: o.name || undefined, lang: o.lang || undefined, script, fix: parseFix(o.fix),
+    plan: o.plan ? JSON.parse(readFileSync(o.plan, "utf8")) : undefined, pace: (o.pace || undefined) as Pace | undefined, fit: o.fit ? Number(o.fit) : undefined,
+    denoise: (o.denoise || undefined) as any, prompt: o.prompt || undefined, audit: !o.noAudit, dryRun: o.dryRun });
+  if (r.exit === 3) { console.error(r.notes.join("\n")); process.exit(3); }
+  console.log(`corte: ${r.duration.raw.toFixed(1)} s brutos -> rascunho ${r.duration.draft.toFixed(1)} s -> final ${r.duration.final.toFixed(1)} s (${r.takes.length} takes, ritmo ${r.pace})`);
+  for (const x of r.removed) console.log(`  saiu  ${x.source} ${x.start.toFixed(2)}-${x.end.toFixed(2)} "${x.text}" · ${x.why}`);
+  for (const x of r.kept_against_draft) console.log(`  ficou ${x.source} ${x.start.toFixed(2)}-${x.end.toFixed(2)} "${x.text}" · ${x.why}`);
+  console.log(`verify_cut: ${r.verify.inside_words} borda(s) dentro de palavra, ${r.verify.clicks} clique(s)${r.verify.flags.length ? ` · ${r.verify.flags.join("; ")}` : ""}`);
+  if (r.audit.ran) console.log(`audit_cut: fala do corte ${r.audit.speech_equal ? "igual à esperada" : `diferente: ${r.audit.diff.join(", ")}`}`);
+  if (r.fit.target) console.log(`caber em ${r.fit.target} s: ${r.fit.note}`);
+  console.log(`relatório: ${join(r.dir, "CORTE.md")}\nno th-batch: "cut": "${fwd(join(r.dir, "cut.json"))}"`);
+  const bad = (r.verify.inside_words ?? 0) > 0 || (r.verify.clicks ?? 0) > 0 || r.audit.speech_equal === false;
+  process.exit(r.exit || (bad ? 1 : 0));
+} else if (cmd === "audio-check") {
+  const project = projectDir(flag("--project") || undefined);
+  const files = argv.slice(1);
+  if (!files.length) usage();
+  const r = noiseCheck(files.map((f) => resolve(f)), join(project, APP_DIR, "cache", "audio-check"));
+  if (!r.ok) { console.error(`audio-check: ${r.reason}`); process.exit(3); }
+  for (const x of r.sources) console.log(`${basename(x.file)}: voz ${x.speech_db} dB, fundo ${x.noise_db} dB, diferença ${x.snr_db} dB (${x.level}) · clipping ${x.clipping} · eco ${x.echo} · denoise sugerido: ${x.suggest}`);
+  console.log(r.text);
+} else if (cmd === "subtitles") {
+  const outDir = flag("--out-dir");
+  const [, a] = argv;
+  if (!a) usage();
+  const spec = loadSpec(a);
+  const sub = exportSubtitles(spec);
+  const dir = outDir ? resolve(outDir) : dirname(resolve(a));
+  const base = join(dir, spec.id);
+  writeFileSync(`${base}.srt`, sub.srt);
+  writeFileSync(`${base}.vtt`, sub.vtt);
+  const cs = checkSubtitles(sub.srt, spec.captions!.words, spec.duration, "srt"), cv = checkSubtitles(sub.vtt, spec.captions!.words, spec.duration, "vtt");
+  console.log(`${base}.srt: ${cs.cues} legendas, ${cs.ok ? "válido" : "INVÁLIDO: " + cs.problems.join("; ")}`);
+  console.log(`${base}.vtt: ${cv.cues} legendas, ${cv.ok ? "válido" : "INVÁLIDO: " + cv.problems.join("; ")}`);
+  process.exit(cs.ok && cv.ok ? 0 : 1);
+} else if (cmd === "reframe") {
+  const o = { project: flag("--project"), out: flag("--out") };
+  const [, a] = argv;
+  if (!a) usage();
+  const spec = loadSpec(a);
+  if (!spec.reframe) spec.reframe = { mode: "follow-face" };
+  if (o.project) spec.reframe.project = projectDir(o.project);
+  const notes = materializeReframe(spec, join(dirname(resolve(a)), ".editai-reframe-cache"));
+  for (const [src, p] of Object.entries(spec.reframe.paths ?? {})) console.log(`${basename(src)}: ${p.width}x${p.height} -> corte ${p.cw}x${p.ch}, ${p.moves} movimento(s), ${p.measured ? `${p.faces.length} amostras do rosto` : "rosto não medido (corte central)"} · ${p.tool}`);
+  for (const c of reframeChecks(spec)) console.log(`  ${c.pass ? "ok  " : c.blocking ? "FAIL" : c.info ? "info" : "warn"} ${c.id}: ${c.detail}`);
+  for (const n of notes) console.log(`  nota ${n}`);
+  const out = resolve(o.out || a);
+  writeFileSync(out, JSON.stringify(spec, null, 2));
+  console.log(`spec: ${out}`);
+  process.exit(notes.length ? 3 : 0);
 } else if (cmd === "brief") {
   const o = { project: flag("--project"), answers: flag("--answers"), answersJson: flag("--answers-json"), confirm: flag("--confirm") !== undefined, adjust: flag("--adjust"), format: flag("--format") };
   const [, a] = argv;

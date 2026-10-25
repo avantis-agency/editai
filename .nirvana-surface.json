@@ -4,7 +4,7 @@
   "slug": "editai",
   "contract_version": "1.0.0",
   "surface_hash": "d7d8a7f1e4997e1e",
-  "prose_hash": "9ca13fa369a61911",
+  "prose_hash": "e2c30fc16dd8d4c2",
   "entries": {
     "agent:agents/VEO_VIDEO.md": {
       "type": "agent",
@@ -20,7 +20,7 @@
     },
     "agent:agents/edit-briefing-guide.md": {
       "type": "agent",
-      "hash": "d283a958fc94398b"
+      "hash": "a04c221943a496b7"
     },
     "agent:agents/edit-qa-auditor.md": {
       "type": "agent",
@@ -36,7 +36,7 @@
     },
     "agent:agents/retention-editor.md": {
       "type": "agent",
-      "hash": "0f4d2c9ac984fd74"
+      "hash": "82a6031a810bfec8"
     },
     "agent:agents/shot-stitcher.md": {
       "type": "agent",
@@ -129,7 +129,7 @@
         "produces:reels-mp4",
         "produces:retention-edit-mp4"
       ],
-      "hash": "0765d2274a0c94e6"
+      "hash": "b00d9037b302c0f0"
     },
     "capability:video.retention_edit.guided": {
       "type": "capability",
@@ -218,7 +218,7 @@
     },
     "task:tasks/audit-retention-edit.md": {
       "type": "task",
-      "hash": "f2cd749f79d7f576"
+      "hash": "ddd0df4500493a75"
     },
     "task:tasks/audit-video-quality.md": {
       "type": "task",
@@ -254,7 +254,7 @@
     },
     "task:tasks/plan-retention-edit.md": {
       "type": "task",
-      "hash": "d78973263daa6b7d"
+      "hash": "2a884e14d55fa1c2"
     },
     "task:tasks/plan-text-hook-batch.md": {
       "type": "task",
@@ -318,7 +318,7 @@
     },
     "workflow:workflows/retention-edit": {
       "type": "workflow",
-      "hash": "ed46df2b7a55f565"
+      "hash": "1e48ce6648cc5c60"
     },
     "workflow:workflows/retention-review": {
       "type": "workflow",

@@ -29,6 +29,7 @@ import { intersect, measureTextBox } from "./measure.ts";
 import { measureTime, unsafeRects } from "./safezones.ts";
 import { captionGroups, captionSpans, widestMoment } from "./ass.ts";
 import type { EditSpec, MediaLayer, Rect, Sfx } from "./spec.ts";
+import { faceUnion, materializeReframe, reframeOn } from "./reframe.ts";
 
 // ── the contract in the spec (BROLL.md §6.2) ────────────────────────────────────
 
@@ -237,6 +238,15 @@ export function computeFaces(spec: EditSpec, st: EditonnyStatus, cacheRoot: stri
   const { width: W, height: H } = spec.canvas;
   const out: BrollFace[] = [];
   const takes = spec.layers.filter((l) => l.kind === "video" && !l.rect && !l.broll);
+  if (reframeOn(spec)) {
+    // reframed takes (2.2.0): the face where the crop puts it, from the same track_faces path the render follows
+    materializeReframe(spec, join(cacheRoot, "reframe"));
+    for (const l of takes) {
+      const rect = faceUnion(spec, l.start + 0.001, l.start + l.duration - 0.001);
+      if (rect) out.push({ start: r3(l.start), end: r3(l.start + l.duration), rect, source: "editonny track_faces.py no corte que segue o rosto" });
+    }
+    if (out.length) return out;
+  }
   if (st.usable && st.helpers.face_layout) {
     const layouts = new Map<string, any>();
     for (const src of new Set(takes.map((l) => l.src))) {

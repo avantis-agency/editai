@@ -1,5 +1,52 @@
 # Changelog
 
+## 2.2.0 (2026-10-25)
+
+Corte medido e limpeza padrão, onda 2 da fusão com o editonny, e uma fatia da onda 5: gravação deitada que vira vertical seguindo o rosto. Pedido do usuário: "pode trabalhar na fusão então", com um vídeo real de 54 s como prova (trace `editai-onda2-corte-20261025-065311`; plano em `editai-fusao-auditoria-20261024-172940`, `PLANO-ONDAS.md` ondas 2 e 5). Testado só no Windows 10, com o editonny 1.0.0 instalado. A gravação de prova é pessoal e não entrou no squad.
+
+### novo
+
+- **`cli.ts cut <pasta | vídeos>`** (`lib/edit-engine/cut.ts`). Da gravação bruta aos takes do spec, com cada passo medido pelo editonny 1.0.0 por subprocesso:
+  1. diagnóstico do áudio antes de editar (`noise_check.py`: ruído, clipping, eco e o denoise sugerido);
+  2. palavras (`transcribe_batch.py` numa pasta, `transcribe.py` em arquivos) e frases (`pack_transcripts.py`);
+  3. rascunho (`assemble_cut.py`), nunca o corte final;
+  4. revisão do rascunho pelo EditAi, a limpeza padrão (matriz 3.1 e 12.2): respiração, ruído, hesitação, falso começo e tomada repetida saem; uma frase completa dita de novo logo em seguida, palavra por palavra, é ênfase e fica; palavra que o rascunho deixou entre dois blocos volta para o vizinho; borda dentro de palavra passa para depois dela; `--plan` guarda o que o agente decidiu (`keep`, `drop`, `optional`);
+  5. bordas pela forma de onda (`waveform_cut.py`, `precise_edges.py`);
+  6. ritmo (`--pace tight|natural|reverent`): só fica a pausa que o ritmo pede (depois de frase, depois de vírgula), esticando o take para dentro do próprio silêncio, nunca para dentro de respiração, ruído ou palavra; toda junção deixa o J-cut livre da última palavra. As pausas são medidas no corte renderizado e corrigidas (até 3 passadas) e viram `holds` do spec;
+  7. "caber em N segundos" (`--fit N`): saem primeiro as frases repetidas, depois o que o plano marcou como desvio, depois as pausas; o que saiu fica listado; se ainda não couber, saída 4 com os candidatos para o agente;
+  8. prova: `render_cut.py`, `verify_cut.py` (palavra cortada, clique, níveis) com reparo automático, `audit_cut.py` (retranscreve o corte) e a comparação da fala inteira com a esperada (`--script`, ou as palavras mantidas);
+  9. palavras da legenda com o início medido (`align_words.py`; correção acima de 0,25 s é recusada), a grafia do roteiro palavra por palavra (`--script`, que nunca acrescenta fala) e `--fix "ouvido=certo"` para o que o Whisper erra;
+  10. `--denoise off|auto|light|strong`: a voz de cada fonte limpa pelo `denoise.py` (perfil das pausas da própria fonte, mesma sincronia) num WAV que os takes usam como áudio (`MediaLayer.audio_src`).
+  Saída em `<projeto>/editai/cut/<nome>/`: `cut.json`, `CORTE.md` (rascunho e final lado a lado, o que saiu com tempos e por quê, a prova) e `edit/` (arquivos do editonny). Sem editonny: saída 3.
+- **`th-batch`**: o item aceita `"cut": "<cut.json>"` (takes, palavras e pausas pedidas) e `"reframe"`; escreve SRT e VTT ao lado de cada MP4.
+- **QA `breaths_remaining`** (matriz 3.6): a voz do spec renderizada sozinha, toda pausa de 0,25 s ou mais pela regra do `breaths.py` (janela de 10 ms, limiar pelo próprio envelope), portada em Bun. Com corte medido só as pausas declaradas e o fim parado podem ficar, e o check bloqueia; com takes escolhidos à mão ele só informa.
+- **`cli.ts subtitles <spec>`** (matriz 3.13): SRT e VTT das mesmas palavras da legenda queimada, sem retranscrever, e a conferência (numeração, tempos, sobreposição, texto igual às palavras).
+- **`cli.ts audio-check <vídeos>`** (matriz 3.15): o diagnóstico do `noise_check.py` sem cortar nada.
+- **Reframe 16:9 → 9:16 seguindo o rosto** (`spec.reframe`, `lib/edit-engine/reframe.ts`, matriz 4.2 em parte): o `track_faces.py` mede o rosto 10 vezes por segundo na fonte e uma câmera virtual mais calma decide o corte (zona morta de 15% do corte, alvo onde a pessoa assenta, viagem de 0,8 a 1,6 s com curva suave, no máximo uma a cada 1,2 s); altura inteira da fonte, rosto no centro. `layout: "band"` põe a imagem sob uma faixa no topo (cópia desfocada e escurecida, ou cor lisa) que guarda a headline longe da cabeça. Os olhos e a boca medidos viram `protect_regions` quando o spec não declara. QA `reframe_face` (bloqueia) e `reframe_motion`; sem editonny, corte central e o aviso `reframe_face_measured`. `cli.ts reframe <spec>` mede e mostra o caminho. O B-roll usa o mesmo rosto.
+- Briefing: o plano ganha a linha **Limpeza** (padrão em toda edição completa); "mantém as pausas" e "não corta nada" mudam isso; "caber em 45 segundos" vira a linha **Duração**.
+- Agente `retention-editor` com a limpeza padrão como contrato, o `cut` antes do lote e o reframe. Catálogo: `reframe_follow_face`. `doctor`: corte medido e reframe.
+
+### decisões em que o código pediu outra coisa que a auditoria
+
+- **Silêncio sem `silencedetect`.** O plano pedia `breaths_remaining` com `silencedetect`. Ele compara amostra por amostra: o ruído da sala passa do limiar e as pausas que o `breaths.py` (e quem ouve) acha somem. O EditAi usa a janela de 10 ms do editonny; no corte de prova deu o mesmo limiar (-29,6 dB) e as mesmas 9 pausas do `breaths.py`.
+- **`breaths_remaining` mede a voz antes do denoise.** Com o fundo limpo, o limiar relativo desce e a pausa natural de uma vírgula vira "silêncio". O que o corte deixou é julgado contra a sala de verdade.
+- **Pausa pedida medida no corte, não estimada.** Pela fonte, o eco da sala engana a conta. O `cut` renderiza, mede cada junção como o QA mede e corrige.
+- **Take depois do primeiro abre a imagem 2 quadros depois do início medido.** Com `transitions.jcut_frames` 2, a voz entra exatamente no início medido, 2 quadros antes do corte, como o `render_cut.py` que foi verificado.
+- **`denoise.py` e `track_faces.py` por `python -B -c`.** São bibliotecas, sem linha de comando para o que o EditAi precisa (limpar uma fonte inteira; medir uma fonte sem `cut.mp4`). O código continua no editonny; nada é gravado na instalação.
+- **Comparação da fala pelo texto inteiro.** O `audit_cut.py` compara trecho a trecho, e o Whisper adianta o começo da palavra e a joga no trecho anterior. Valem a fala inteira e as bordas do `verify_cut`; o relatório por trecho fica como informação.
+- **Prompt do Whisper sem termos.** Na prova, pôr no `--prompt` o termo que o Whisper ouviu errado não mudou a transcrição (veio errado de novo). Fica só para nomes próprios (matriz 12.5); termo mal ouvido é `--fix`.
+- **Faixa no topo para fonte deitada.** Num púlpito a cabeça fica perto do alto do quadro: num corte de altura inteira a headline cairia na testa. A faixa resolve e ainda deixa o corte 32% mais largo (804 contra 608 px), com mais margem para os gestos.
+
+### alterado
+
+- `spec.ts` (`cut`, `reframe`, `MediaLayer.audio_src`), `ffmpeg.ts` (corte com x por quadro e faixa no topo; a voz limpa entra como entrada própria), `qa.ts`, `th-batch.ts`, `broll.ts`, `editor.ts` (`baseSig` com o reframe), `cli.ts`, `briefing.ts`, `doctor.ts`; novos `cut.ts`, `silence.ts`, `denoise.ts`, `subtitles.ts`, `reframe.ts`.
+- `squad.yaml` 2.2.0: descrição do squad e da capability execute, 3 `example_briefs` novos (2 PT e 1 EN; 55 → 58), critérios `editai_edit_measured_cut` e `editai_edit_reframe_face`. Nenhuma `keyword` nova (a capability execute segue no limite de 60). Workflow `retention-edit` 1.3.0; tasks `plan-retention-edit` e `audit-retention-edit`; `dependencies.yaml`; README.
+
+### não mudou
+
+- Sem `cut`, `reframe` e `audio_src` no spec, o grafo do ffmpeg é o mesmo texto de antes. Regressões idênticas byte a byte: v2 `3a95058d…`, fumaça `b21e3618…` e `27f556fd…`, e o spec da onda 1 com `broll.mode: "off"` (`3a95058d…`).
+- B-roll, estilo de referência, mini editor, biblioteca, Concat e os pipelines de geração. Nenhuma mídia do editonny entrou no squad; o editonny e os outros squads não foram tocados (`helpers/__pycache__` continua inexistente).
+
 ## 2.1.0 (2026-10-25)
 
 B-roll automático, onda 1 da fusão com o editonny. Pedido do usuário: "Isso é muito importante, cara, dele saber criar esses B-rolls sozinho", e para a Bianca, que edita no Windows com o Codex, "pode trabalhar na fusão então" (trace `editai-onda1-broll-20261024-175913`; plano em `editai-fusao-auditoria-20261024-172940`, `PLANO-ONDAS.md` onda 1 e `BROLL.md`). Testado só no Windows 10, com o editonny 1.0.0 instalado.

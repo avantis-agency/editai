@@ -73,6 +73,7 @@ export function editKey(spec: EditSpec): string {
 export function baseSig(spec: EditSpec): string {
   const parts: unknown[] = [spec.canvas, spec.duration, spec.layers, spec.camera, spec.camera_focus, spec.flashes, spec.transitions];
   if (spec.broll) parts.push(spec.broll.mode, spec.broll.items, spec.broll.marks ?? []); // B-roll is in the picture (2.1.0)
+  if (spec.reframe) parts.push(spec.reframe.mode, spec.reframe.layout ?? "fill", spec.reframe.band_px ?? null, spec.reframe.band_style ?? null, spec.reframe.dead_zone ?? null); // reframe is in the picture (2.2.0)
   return sha1(JSON.stringify(parts)).slice(0, 12);
 }
 

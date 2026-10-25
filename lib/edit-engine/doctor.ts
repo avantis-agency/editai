@@ -106,6 +106,16 @@ export async function doctor(): Promise<{ items: Item[]; ok: boolean }> {
   add({ name: "B-roll face position (optional)", ok: st.usable && st.helpers.face_layout, required: false,
     detail: st.usable && st.helpers.face_layout ? "face_layout.py (YuNet) mede olhos e boca de cada take" : "sem face_layout.py: o B-roll usa as protect_regions do spec para fugir do rosto",
     fix: "instale o editonny 1.0.0, ou declare protect_regions (olhos e boca) no spec" });
+  // measured cut, denoise and reframe (2.2.0): the editonny helpers cli.ts cut and the reframe call
+  const cutHelpers = ["transcribe_batch", "pack_transcripts", "assemble_cut", "waveform_cut", "precise_edges", "render_cut", "verify_cut", "audit_cut", "align_words", "noise_check", "denoise"];
+  const missingCut = st.engine ? cutHelpers.filter((h) => !existsSync(join(st.engine!, "helpers", `${h}.py`))) : cutHelpers;
+  add({ name: "measured cut (optional)", ok: st.usable && !missingCut.length, required: false,
+    detail: st.usable && !missingCut.length ? "cli.ts cut: rascunho, bordas pela forma de onda, verify_cut, audit_cut, align_words, diagnóstico de ruído e denoise pelo editonny, offline" : `corte medido indisponível (${st.reason || `faltam ${missingCut.join(", ")}`}): os takes ficam a cargo do agente; o QA de silêncio e o SRT continuam`,
+    fix: "instale o editonny 1.0.0 e rode o setup dele uma vez (o .venv do motor), ou defina EDITONNY_ENGINE" });
+  const tf = !!st.engine && existsSync(join(st.engine, "helpers", "track_faces.py"));
+  add({ name: "reframe following the face (optional)", ok: st.usable && tf, required: false,
+    detail: st.usable && tf ? "reframe follow-face: track_faces.py mede o rosto 10 vezes por segundo" : "sem track_faces.py: o reframe usa o corte central e o QA avisa que o rosto não foi medido",
+    fix: "instale o editonny 1.0.0" });
   if (win) {
     const dev = run(["reg", "query", "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\AppModelUnlock", "/v", "AllowDevelopmentWithoutDevLicense"]);
     add({ name: "Windows: Modo de Desenvolvedor (optional)", ok: dev.code === 0 && /0x1\b/.test(dev.out), required: false,

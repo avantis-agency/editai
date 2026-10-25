@@ -30,7 +30,8 @@ export interface Question { id: Field | "same_profile" | "first_use"; header: st
 export interface BriefInput { client: string; text?: string; transcript?: string; material?: string[]; references?: string[]; niche?: string; first_use?: boolean; session?: "new" | "ongoing"; lang?: string }
 export interface History { folder: boolean; briefs: number; confirmed: number; profiles: number }
 export interface FirstUse { status: "yes" | "no" | "ask"; reason: string; lang: "pt" | "en"; round: number; show_now: boolean; welcome: string | null; history: History }
-export interface Known { destination?: string; format?: string; mood?: string; reference?: string; captions?: boolean; headline?: boolean; headline_text?: string }
+export interface Known { destination?: string; format?: string; mood?: string; reference?: string; captions?: boolean; headline?: boolean; headline_text?: string;
+  cleanup?: "standard" | "keep_pauses" | "off"; fit_s?: number }
 export interface Niche { id: string; name: string; match: string[]; recommend: Partial<Record<Field, string>>; apply: Partial<StyleProfile["apply"]>; tips: string[] }
 export interface BriefState {
   brief_version: 1; id: string; dir: string; project: string; client: string; created_at: string;
@@ -38,7 +39,9 @@ export interface BriefState {
   round: number; questions: Question[]; answers: Record<string, string>; profile_offered: boolean; profile_used: boolean; profile_known?: Known;
   reference_style: string | null; plan: Plan | null; confirmed: boolean; first_use?: FirstUse;
 }
-export interface Plan { template: string; platforms: string[]; apply: StyleProfile["apply"]; headline_text: string | null; music_track: string | null; notes: string[]; markdown: string }
+/** cleanup (2.2.0): the standard cleanup of every full edit (cli.ts cut), unless the person asked otherwise; fit_s: "caber em N segundos". */
+export interface Plan { template: string; platforms: string[]; apply: StyleProfile["apply"]; headline_text: string | null; music_track: string | null; notes: string[]; markdown: string;
+  cleanup?: "standard" | "keep_pauses" | "off"; fit_s?: number | null }
 
 const OTHER: Option = { value: "other", label: "Outro", description: "escreva do seu jeito" };
 const BANK: Record<Field, Omit<Question, "recommended">> = {
@@ -176,6 +179,11 @@ export function extract(text: string): { known: Known; sources: Record<string, s
   const q = text.match(/(?:headline|t[ií]tulo|chamada|texto de destaque)\s*[:=]?\s*["“']([^"”']{3,80})["”']/i) ?? text.match(/["“]([^"”]{3,80})["”]/);
   if (q) { set("headline", true); set("headline_text", q[1].trim()); }
   if (any(t, /(sem referencia|nenhuma referencia|no reference)/)) set("reference", "none");
+  // standard cleanup (2.2.0): it is the default; the message can keep the pauses or switch the cleanup off
+  if (any(t, /(sem limpeza|sem cortar nada|nao corta nada|nao corte nada|nao mexe no corte|nao mexa no corte|deixa como esta|no cleanup|no cuts|keep everything)/)) set("cleanup", "off");
+  else if (any(t, /((mantem|mantenha|manter|deixa|deixe|nao tira|nao tire|sem tirar) (as |essas )?pausas|keep (the |my )?pauses)/)) set("cleanup", "keep_pauses");
+  const fit = t.match(/(caber em|cabe em|caiba em|caibam em|cabendo em|ate|no maximo|encurta(?:r)? (?:pra|para)|reduz(?:ir)? (?:pra|para)|fit (?:in|into)|under|max(?:imum)?)\s*(\d{1,3})\s*(?:s\b|seg\b|segundos|seconds|secs?\b)/);
+  if (fit && Number(fit[2]) >= 5 && Number(fit[2]) <= 180) set("fit_s", Number(fit[2]));
   return { known: k, sources: src };
 }
 
@@ -337,12 +345,18 @@ export function buildPlan(s: BriefState, niche: Niche | null, style: StyleProfil
   if (k.destination === "lesson") { apply.cut.zoom_cut_every_s = null; notes.push("Aula: sem cortes de zoom extras, para a explicação respirar."); }
   for (const [f, v] of Object.entries(s.other)) notes.push(`Você escreveu em "${BANK[f as Field].header}": "${v}". O agente ajusta o plano a isso.`);
   const track = apply.music.enabled && apply.music.mood ? pickTrack(apply.music.mood)?.id ?? null : null;
+  const cleanup = k.cleanup ?? "standard";
+  const cleanLine = cleanup === "off" ? "sem limpeza, como você pediu: o material entra como veio." : cleanup === "keep_pauses"
+    ? "as pausas ficam, como você pediu; erros, falsos começos e repetições saem, medidos na forma de onda."
+    : "pausas longas, respirações, erros, falsos começos e repetições saem sempre, medidos na forma de onda e sem cortar palavra; repetição de propósito (ênfase) fica. Peça para manter, se quiser.";
   const head = headlineSuggestion(s);
   const a = apply;
   const md = [
     "## Plano sugerido", "",
     `- **Formato:** ${label("format", fmt).toLowerCase()} (template \`${template}\`), para ${label("destination", k.destination ?? "reels_tiktok")}.`,
     `- **Cortes:** ${a.cut.zoom_cut_every_s ? `corte de zoom a cada ~${pt(a.cut.zoom_cut_every_s)} s nas pausas da fala` : "só os cortes do material, sem acelerar"}${a.cut.punch_amount ? `, zoom alternando 100/${Math.round(100 + a.cut.punch_amount * 100)} %` : ", sem zoom alternado"}; transição suave entre takes (J-cut).`,
+    `- **Limpeza:** ${cleanLine}`,
+    ...(k.fit_s ? [`- **Duração:** caber em ${k.fit_s} s: saem primeiro as frases repetidas e os desvios, depois as pausas; a lista do que saiu vem no relatório do corte.`] : []),
     `- **Legenda:** ${a.captions.enabled ? (a.captions.preset === "bold-word" ? "palavra que cresce, caixa alta, palavras-chave em destaque" : "clássica, palavra ativa colorida") : "sem legenda"}.`,
     `- **Headline:** ${a.headline.mode === "none" ? "sem headline" : `${head ? `"${head}"` : "o texto que você mandar"}, ${a.headline.mode === "fixed" ? "fixa o vídeo todo" : "só nos 3 primeiros segundos"} (${a.headline.font_family})`}.`,
     `- **Música:** ${a.music.enabled ? `clima \`${a.music.mood}\`${track ? `, faixa \`${track}\` (biblioteca CC0 do squad)` : ""}, ${a.music.below_voice_db} LU abaixo da voz` : "sem música"}.`,
@@ -353,7 +367,7 @@ export function buildPlan(s: BriefState, niche: Niche | null, style: StyleProfil
     ...(niche?.tips?.length ? ["", "Sugestões:", ...niche.tips.slice(0, 2).map((t) => `- ${t}`)] : []),
     "", "Posso editar?",
   ].join("\n");
-  return { template, platforms, apply, headline_text: a.headline.mode === "none" ? null : head, music_track: track, notes, markdown: md };
+  return { template, platforms, apply, headline_text: a.headline.mode === "none" ? null : head, music_track: track, notes, markdown: md, cleanup, fit_s: k.fit_s ?? null };
 }
 
 const save = (s: BriefState) => writeFileSync(join(s.dir, "state.json"), JSON.stringify(s, null, 2));

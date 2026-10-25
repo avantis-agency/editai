@@ -20,8 +20,11 @@
 //     "style": "editai/styles/ref.style.json",                             optional: reference style profile (cli.ts style-extract)
 //     "slots": { <overrides> },
 //     "template": "talking-head-broll",                                   optional (2.1.0): talking head with automatic B-roll
-//     "broll_marks": [5.7, 21.0]                                         optional: "põe um card aqui" points (editonny suggest_visuals marks)
+//     "broll_marks": [5.7, 21.0],                                        optional: "põe um card aqui" points (editonny suggest_visuals marks)
+//     "cut": "editai/cut/<name>/cut.json",                                optional (2.2.0): takes, words and kept pauses from cli.ts cut
+//     "reframe": { "mode": "follow-face", "layout": "band" }              optional (2.2.0): a 16:9 source reframed into 9:16 following the face
 //   }],
+//   "reframe": { "mode": "follow-face" },     optional: the same for every item (an item's own reframe wins)
 //   "template": "talking-head-broll",        optional: the same for every item (default talking-head-captions)
 //   "broll_project": "..",                    optional: project folder with editai/broll/ media and the card cache (default: the batch folder)
 //   "style": "editai/styles/ref.style.json"   optional: the same for every item (an item's own style wins)
@@ -38,19 +41,22 @@ import { startPreview } from "./preview-server.ts";
 import type { EditSpec, MediaLayer } from "./spec.ts";
 import { applyStyleToSpec, loadStyle, styleSlots, type StyleProfile } from "./style.ts";
 import { suggestBroll } from "./broll.ts";
+import { loadCut } from "./cut.ts";
+import { exportSubtitles } from "./subtitles.ts";
+import type { ReframeSpec } from "./reframe.ts";
 
 type Word = { word: string; start: number; end: number; emphasis?: boolean };
-export interface Take { src: string; in: number; duration: number; framing?: string }
+export interface Take { src: string; in: number; duration: number; framing?: string; audio_src?: string }
 export interface ThItem {
   id: string; hook_lines: string[]; takes: Take[]; words?: Word[]; words_files?: Record<string, string>;
   script?: string; emphasis?: string[]; cut_whoosh?: boolean; cut_whoosh_gain_db?: number; style?: string; slots?: Record<string, unknown>;
-  template?: string; broll_marks?: number[];
+  template?: string; broll_marks?: number[]; cut?: string; reframe?: ReframeSpec;
 }
-export interface ThBatch { out_dir: string; concurrency?: number; defaults?: Record<string, unknown>; style?: string; template?: string; broll_project?: string; items: ThItem[] }
+export interface ThBatch { out_dir: string; concurrency?: number; defaults?: Record<string, unknown>; style?: string; template?: string; broll_project?: string; reframe?: ReframeSpec; items: ThItem[] }
 export interface ThResult {
   id: string; ok: boolean; error?: string; mp4?: string; spec?: string; qa?: QaReport; render_s?: number;
   words_from?: string; script_check?: string; preview?: string; preview_command?: string; style?: string; style_log?: string[]; draft?: string;
-  broll?: string;
+  broll?: string; subtitles?: string;
 }
 
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
@@ -110,6 +116,9 @@ function markEmphasis(words: Word[], phrases?: string[]): void {
 export function buildItemSpec(item: ThItem, defaults: Record<string, unknown>, base: string, outDir: string, style?: StyleProfile): { spec: EditSpec; words_from: string; script_check: string; style_log: string[] } {
   const template = loadTemplate(item.template ?? "talking-head-captions");
   if (!item.id || !/^[a-z0-9][a-z0-9._-]*$/i.test(item.id)) throw new Error(`item id must be a filename-safe slug: ${item.id}`);
+  // a measured cut (2.2.0): its takes, its words (source seconds) and the pauses it kept on purpose
+  const cut = item.cut ? loadCut(expandPath(item.cut, base)) : undefined;
+  if (cut) item = { ...item, takes: item.takes?.length ? item.takes : cut.takes.map((t) => ({ src: t.src, in: t.in, duration: t.duration, framing: t.framing, audio_src: t.audio_src })), words_files: item.words_files ?? cut.words_files };
   if (!item.takes?.length) throw new Error(`${item.id}: takes is empty`);
   const takes = item.takes.map((t) => ({ ...t, src: expandPath(t.src, base) }));
   for (const t of takes) if (!existsSync(t.src)) throw new Error(`${item.id}: clip not found: ${t.src}`);
@@ -127,6 +136,7 @@ export function buildItemSpec(item: ThItem, defaults: Record<string, unknown>, b
   let at = 0;
   spec.layers = takes.map((t, i): MediaLayer => {
     const l: MediaLayer = { id: `t${i + 1}`, src: t.src, kind: "video", in: t.in, start: at, duration: t.duration, fit: "cover", audio: true, framing: framing(t) };
+    if (t.audio_src) l.audio_src = expandPath(t.audio_src, base);
     at += t.duration;
     return l;
   });
@@ -139,6 +149,11 @@ export function buildItemSpec(item: ThItem, defaults: Record<string, unknown>, b
       { hook: "hard_cut", at: cuts[0], why: `${takes.length} takes, silences and dead frames out` },
       { hook: "smooth_take_cut", at: cuts[0], why: "every cut: audio leads 2 frames, 60 ms audio crossfade, scale alternates 100/107% on the cut frame; no image dissolve" });
   }
+  if (cut) {
+    spec.cut = { file: expandPath(item.cut!, base), pace: cut.pace, holds: cut.holds, end_hold_s: cut.end_hold_s, verify: { inside_words: cut.verify.inside_words, clicks: cut.verify.clicks, speech_equal: cut.audit.speech_equal } };
+    spec.notes = [...(spec.notes ?? []), `measured cut ${cut.name}: ${cut.duration.raw.toFixed(1)} s raw -> ${cut.duration.final.toFixed(1)} s, pace ${cut.pace}, ${cut.removed.length} block(s) out (CORTE.md)`];
+  }
+  if (item.reframe) { spec.reframe = structuredClone(item.reframe); if (spec.reframe.project) spec.reframe.project = expandPath(spec.reframe.project, base); }
   const style_log = style ? applyStyleToSpec(spec, style) : [];
   const cutWhoosh = style ? style.apply.sfx.cut_whoosh : item.cut_whoosh;
   const whooshDb = item.cut_whoosh_gain_db ?? (style ? style.apply.sfx.gain_db : -30);
@@ -185,7 +200,7 @@ export async function runThBatch(batchPath: string, opts: { previewCheck?: boole
       try {
         const stylePath = opts.style ? resolve(opts.style) : (item.style ?? batch.style);
         const style = stylePath ? loadStyle(expandPath(stylePath, base)) : undefined;
-        const { spec, words_from, script_check, style_log } = buildItemSpec({ template: batch.template, ...item }, batch.defaults ?? {}, base, outDir, style);
+        const { spec, words_from, script_check, style_log } = buildItemSpec({ template: batch.template, reframe: batch.reframe, ...item }, batch.defaults ?? {}, base, outDir, style);
         if (spec.broll && spec.broll.mode === "auto" && !spec.broll.items?.length) {
           // automatic B-roll (2.1.0): the client media of the project and the editonny cards, before the render
           if (item.broll_marks?.length) spec.broll.marks = item.broll_marks.map((at) => ({ at }));
@@ -206,6 +221,13 @@ export async function runThBatch(batchPath: string, opts: { previewCheck?: boole
         const r = await render(spec, join(outDir, `${spec.id}.mp4`));
         res.qa = runQa(spec, r.out, { reportDir: outDir, expectedText: { hook: item.hook_lines } });
         Object.assign(res, { mp4: r.out, spec: r.resolved_spec, render_s: r.seconds, ok: res.qa.verdict !== "FAIL" });
+        if (spec.captions?.words.length) {
+          // SRT and VTT from the same caption words (2.2.0)
+          const sub = exportSubtitles(spec);
+          writeFileSync(join(outDir, `${spec.id}.srt`), sub.srt);
+          writeFileSync(join(outDir, `${spec.id}.vtt`), sub.vtt);
+          res.subtitles = join(outDir, `${spec.id}.srt`);
+        }
         res.preview_command = `bun "${cli}" preview "${r.resolved_spec.replace(/\\/g, "/")}" --open`;
         console.log(`[th-batch] ${spec.id}: render ${r.seconds.toFixed(1)}s, QA ${res.qa.verdict}`);
       } catch (e) {
