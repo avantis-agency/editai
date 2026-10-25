@@ -19,6 +19,8 @@ import { BadRequest, fileSha256, nowIso, type EmphasisEdit, type Feedback } from
 import type { EditOp } from "./live-ops.ts";
 import { familyOf, vMetrics } from "./fonts.ts";
 import { draftSize } from "./canvas.ts";
+import { wordSpans } from "./ass.ts";
+import { faceShiftY } from "./captions.ts";
 import type { QaReport } from "./qa.ts";
 import { loadSpec, resolveSpec, validateSpec, type EditSpec } from "./spec.ts";
 
@@ -227,7 +229,9 @@ export class EditorSession {
         animation: hook.animation, max_width_px: hook.max_width_px ?? null, highlight_words: hook.highlight_words ?? [], style: { ...hook.style, font_family: used(hook.style) } } : null,
       captions: c ? { preset: c.preset ?? "classic", y: c.y, x: s.canvas.width / 2, max_words: c.max_words, highlight_active: c.highlight_active !== false,
         emphasis_color: c.emphasis_color ?? null, pop_scale: c.pop_scale ?? 114, windows: resolveSpec(structuredClone(s)).captions?.windows ?? null, max_width_px: c.max_width_px ?? Math.round(s.canvas.width * 0.8), style: { ...c.style, font_family: used(c.style) },
-        words: c.words.map((w) => ({ i: (w as typeof w & { src_index: number }).src_index, word: w.word, start: w.start, end: w.end, emphasis: !!w.emphasis })) } : null,
+        // 2.4.0: until = when the word leaves the screen (hide_in_pauses), y = a face shift of a centred line; absent = as before
+        words: c.words.map((w, k) => ({ i: (w as typeof w & { src_index: number }).src_index, word: w.word, start: w.start, end: w.end, emphasis: !!w.emphasis,
+          ...(c.hide_in_pauses && c.preset === "word" ? { until: wordSpans(c)[k][1] } : {}), ...(faceShiftY(c, w.start) !== null ? { y: faceShiftY(c, w.start) } : {}) })) } : null,
     };
   }
 

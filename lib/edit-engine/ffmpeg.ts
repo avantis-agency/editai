@@ -9,7 +9,9 @@ import { fitTexts, type FitLog } from "./safezones.ts";
 import { adjacent, assertValid, musicPath, sfxStart, takes, type CameraMove, type EditSpec, type MediaLayer } from "./spec.ts";
 import { materializeBroll } from "./broll.ts";
 import { materializeReframe, reframeChain } from "./reframe.ts";
-import { materializeFaces } from "./canvas.ts";
+import { faceSamples, materializeFaces } from "./canvas.ts";
+import { avoidFaceCenter, fitWordsToPauses } from "./captions.ts";
+import { wordSpans } from "./ass.ts";
 
 const f3 = (n: number) => Number(n.toFixed(3)).toString();
 const SS = 2; // zoompan supersampling, limits sub-pixel jitter on slow pushes
@@ -215,6 +217,10 @@ export async function render(spec: EditSpec, outMp4: string, opts: RenderOptions
   const faceNotes = materializeFaces(spec, join(outDir, ".editai-faces-cache"));
   const work = join(outDir, `.work-${spec.id}`);
   mkdirSync(work, { recursive: true });
+  // 2.4.0: words end where the voice stops (hide_in_pauses); a centred caption line moves off the face only where it would cover it
+  const captionNotes: string[] = [];
+  if (spec.captions?.hide_in_pauses) captionNotes.push(...fitWordsToPauses(spec, work));
+  if (spec.captions?.position === "center") captionNotes.push(...avoidFaceCenter(spec, faceSamples(spec, join(outDir, ".editai-faces-cache"), captionNotes), wordSpans(spec.captions)));
   const { width: W, height: H, fps } = spec.canvas;
   const D = spec.duration;
   const frames = Math.round(D * fps);
@@ -316,7 +322,7 @@ export async function render(spec: EditSpec, outMp4: string, opts: RenderOptions
   const mutes = (a.mutes ?? []).map((m) => `volume=enable='between(t,${f3(m.start)},${f3(m.end)})':volume=0`).join(",");
   const notes: string[] = [];
   if (droppedSfx) notes.push(`${droppedSfx} sfx marked only_with_music left out: the spec has no music`);
-  notes.push(...faceNotes);
+  notes.push(...faceNotes, ...captionNotes);
 
   let bed: string | null = null;
   if (a.music) {
@@ -422,7 +428,7 @@ export async function render(spec: EditSpec, outMp4: string, opts: RenderOptions
   if (fit_log.length) notes.push(...fit_log.map((f) => `fit ${f.layer}: ${f.action}`));
   if (opts.draft) notes.push(`draft render: ${OW}x${OH}, x264 ${opts.draft.preset ?? spec.output.preset} crf ${opts.draft.crf ?? spec.output.crf} (not for posting)`);
   if (opts.noText) notes.push("clean base layer: headline and captions not burned (the mini editor draws them)");
-  if (notes.length) spec.notes = [...(spec.notes ?? []).filter((n) => !/^(fit |loudness: |\d+ sfx marked|music\.below)/.test(n)), ...notes];
+  if (notes.length) spec.notes = [...(spec.notes ?? []).filter((n) => !/^(fit |loudness: |\d+ sfx marked|music\.below|hide_in_pauses: |legenda no centro)/.test(n)), ...notes];
   const resolved_spec = out.replace(/\.mp4$/i, ".spec.json");
   writeFileSync(resolved_spec, JSON.stringify(spec, null, 2), "utf8");
   if (!opts.keepWork) rmSync(work, { recursive: true, force: true });

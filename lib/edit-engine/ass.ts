@@ -2,6 +2,7 @@
 // the engine lives here: pop-in, slide-up, fade, staggered lines, word reveal,
 // highlighted words and word-by-word captions. Bun only.
 import { assSize, familyOf } from "./fonts.ts";
+import { faceShiftY, PAUSE_S, TAIL_S } from "./captions.ts";
 import type { Captions, EditSpec, TextLayer, TextStyle } from "./spec.ts";
 
 /** #RRGGBB -> &HAABBGGRR (ASS colour order is blue-green-red). */
@@ -239,11 +240,18 @@ function boldWordEvents(c: Captions, x: number): string[] {
   return out;
 }
 
-/** On-screen span of each word of the word preset: from its start to the next word, at most HOLD_S into a pause. */
+/**
+ * On-screen span of each word of the word preset: from its start to the next word, at most HOLD_S into a pause.
+ * hide_in_pauses (2.4.0): the word bridges to the next one only across a gap under PAUSE_S with no measured pause
+ * (pause_after, written by the render); otherwise it goes TAIL_S after its end, which the render pulled back to
+ * where the voice stops.
+ */
 export function wordSpans(c: Captions): [number, number][] {
   return c.words.map((w, i) => {
     const next = c.words[i + 1];
-    const end = next ? Math.min(next.start, w.end + HOLD_S) : w.end + HOLD_S;
+    let end: number;
+    if (c.hide_in_pauses) end = next && !w.pause_after && next.start - w.end < PAUSE_S ? next.start : Math.min(w.end + TAIL_S, next ? next.start : Infinity);
+    else end = next ? Math.min(next.start, w.end + HOLD_S) : w.end + HOLD_S;
     return [w.start, Math.max(end, w.start + 0.034)];
   });
 }
@@ -278,7 +286,7 @@ function wordEvents(c: Captions, x: number, mask: boolean): string[] {
     if (!clip) return;
     const text = esc(wordText(w.word, st));
     if (!text) return;
-    const y = Math.round(win?.y ?? c.y);
+    const y = Math.round(win?.y ?? faceShiftY(c, w.start) ?? c.y);
     for (const sh of softShadow(st, x, y, text, mask)) out.push(`Dialogue: 0,${ts(clip[0])},${ts(clip[1])},Captions,,0,0,0,,${sh}`);
     out.push(`Dialogue: 1,${ts(clip[0])},${ts(clip[1])},Captions,,0,0,0,,{\\an5\\pos(${Math.round(x)},${y})}${text}`);
   });

@@ -9,6 +9,7 @@ import { validateReframe, type ReframeSpec } from "./reframe.ts";
 import { resolveCanvas, validateCanvas } from "./canvas.ts";
 import { resolveContinuous, validateContinuous } from "./continuous.ts";
 import { resolveFonts, validateFonts } from "./fonts.ts";
+import { resolveFillers, resolvePosition, validateCaptionOptions } from "./captions.ts";
 
 /** 9:16 platforms, and (2.3.0) the 16:9 ones: the YouTube horizontal player and a church screen, projector or TV. */
 export type Platform = "instagram_reels" | "tiktok" | "youtube_shorts" | "facebook_reels" | "youtube_16x9" | "screen_16x9";
@@ -104,7 +105,11 @@ export type CaptionPreset = "classic" | "bold-word" | "word";
 
 /** Word-level captions (talking head). Words come from a transcriber, never invented. */
 export interface Captions {
-  words: { word: string; start: number; end: number; emphasis?: boolean }[];
+  /**
+   * filler (2.4.0): true = a hesitation, out of the captions (filler_why says why, after listening); false = always a word.
+   * pause_after: written by the render (hide_in_pauses): a measured pause of 0.3 s or more follows the word.
+   */
+  words: { word: string; start: number; end: number; emphasis?: boolean; filler?: boolean; filler_why?: string; pause_after?: boolean }[];
   style: TextStyle;
   y: number;
   max_words: number;      // words per caption group (a group also ends at , . ! ? ; : or a pause >= 0.3 s)
@@ -121,6 +126,17 @@ export interface Captions {
   group_font_px?: number[]; // written by the render fit (one per caption group); do not hand-edit
   /** written by resolveSpec from spec.broll: a caption group that overlaps a window moves to `y` or hides; do not hand-edit */
   windows?: { start: number; end: number; y?: number; hide?: boolean; broll?: string }[];
+  /** 2.4.0 (lib/edit-engine/captions.ts). Absent: as 2.3.0. The style profiles turn the two on with the word preset. */
+  drop_fillers?: boolean;    // hesitations leave the captions and the SRT (never the audio); lists per language in captions.ts
+  lang?: "pt" | "en";        // language of the filler lists (default: broll.lang, else guessed from the words)
+  hide_in_pauses?: boolean;  // word preset: a word shows only while spoken and goes in every pause of 0.3 s or more
+  position?: "center" | "lower_third"; // resolveSpec writes y from it: center = middle of the canvas
+  /** written by resolveSpec (drop_fillers): the words taken out, with the reason; do not hand-edit (set filler: false on a word instead) */
+  dropped?: (Captions["words"][number] & { why: string })[];
+  /** written by the render (hide_in_pauses): what the voice measurement found; do not hand-edit */
+  pauses_measured?: { threshold_db: number; min_s: number; pauses: number; words_before_pause: number; ends_moved: number; tool: string };
+  /** written by the render (position center): stretches moved off the face, with their y; do not hand-edit */
+  face_shifts?: { start: number; end: number; y: number; why: string }[];
 }
 
 /**
@@ -295,6 +311,7 @@ export function validateSpec(s: EditSpec): string[] {
   if (s.cut?.mode && !["measured", "none"].includes(s.cut.mode)) p.push("cut.mode must be measured or none");
   p.push(...validateContinuous(s));
   p.push(...validateFonts(s));
+  p.push(...validateCaptionOptions(s));
   return p;
 }
 
@@ -333,6 +350,9 @@ export function resolveSpec(s: EditSpec): EditSpec {
   resolveContinuous(s);
   resolveCanvas(s);
   resolveFonts(s);
+  // 2.4.0: fillers out of the captions, the caption line placed by name (no-ops when the spec does not ask)
+  resolveFillers(s);
+  resolvePosition(s);
   resolveBroll(s);
   const a = s.audio as AudioSpec | undefined;
   if (a) {

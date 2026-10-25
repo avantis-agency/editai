@@ -129,7 +129,7 @@ export function captionSync(s: EditSpec, work: string): ContinuityCheck[] {
   if (!c?.words.length || !(continuousOn(s) || c.preset === "word")) return [];
   // (a) events vs words
   const ass = buildAss(s);
-  const starts = [...ass.matchAll(/^Dialogue: 1,(d+):(dd):(dd).(dd),[^,]*,Captions,/gm)].map((m) => Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) + Number(m[4]) / 100);
+  const starts = [...ass.matchAll(/^Dialogue: 1,(\d+):(\d\d):(\d\d)\.(\d\d),[^,]*,Captions,/gm)].map((m) => Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) + Number(m[4]) / 100);
   let evMax = 0;
   if (c.preset === "word") for (const t of starts) evMax = Math.max(evMax, Math.min(...c.words.map((w) => Math.abs(t - w.start))));
   // (b) phrase onsets on the voice

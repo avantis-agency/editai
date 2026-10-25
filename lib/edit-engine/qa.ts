@@ -13,7 +13,8 @@ import { adjacent, ghostDissolves, resolveSpec, SQUAD_ROOT, takes, type EditSpec
 import { brollChecks, brollOn, contactSheet } from "./broll.ts";
 import { breathsRemaining } from "./silence.ts";
 import { reframeChecks } from "./reframe.ts";
-import { captionBackground, landscapeChecks, softShadowOnly } from "./canvas.ts";
+import { captionBackground, faceSamples, landscapeChecks, softShadowOnly } from "./canvas.ts";
+import { captionChecks } from "./captions.ts";
 import { captionSync, continuityChecks, continuousOn } from "./continuous.ts";
 
 /** Distinct zoom values (3 decimals) the camera reaches between two timeline seconds. */
@@ -110,6 +111,8 @@ export function runQa(spec: EditSpec, video: string, opts: { reportDir?: string;
     let zmax = 1;
     for (const [id, b] of Object.entries(boxes)) {
       if (!b) continue;
+      // 2.4.0: a centred caption line moved off the face in some stretches is judged word by word (caption_face)
+      if (id === "captions" && spec.captions?.face_shifts?.length) continue;
       const [s, e] = spans[id] ?? [0, spec.duration];
       for (const z of zoomsDuring(spec, s, e)) {
         zmax = Math.max(zmax, z);
@@ -139,6 +142,9 @@ export function runQa(spec: EditSpec, video: string, opts: { reportDir?: string;
   // 2e. continuous mode (2.3.0): the sources whole, no scene cut the source does not have; caption sync
   for (const c of continuityChecks(spec, video)) add(c);
   for (const c of captionSync(spec, work)) add(c);
+  // 2f. 2.4.0: no filler on screen, no word hanging in a pause, the caption line in the centre and off the face
+  const centreFaces = spec.captions?.position === "center" ? faceSamples(spec, join(reportDir, ".editai-faces-cache")) : null;
+  for (const c of captionChecks(spec, perGroup, work, centreFaces)) add(c);
 
   // 3. legibility and dwell time
   const scale = Math.min(W, H) / 1080; // = H / 1920 on every 9:16 canvas; the short side on a 16:9 one (2.3.0)

@@ -7,13 +7,14 @@
   "apply": {
     "cut": { "mode": "none", "zoom_cut_every_s": null, "punch_amount": 0 },
     "canvas": "same-as-source",
-    "captions": { "enabled": true, "preset": "word", "font_px": 60, "uppercase": false, "emphasis_color": null, "box": false },
+    "captions": { "enabled": true, "preset": "word", "font_px": 60, "uppercase": false, "emphasis_color": null, "box": false, "position": "center", "drop_fillers": true, "hide_in_pauses": true },
     "headline": { "mode": "none" },
     "music": { "enabled": false, "mood": null },
     "sfx": { "cut_whoosh": false }
   },
   "tips": [
     "Sem cortes: a ministração tem o próprio ritmo, e as pausas fazem parte dela.",
+    "Legenda no centro da tela, sem os vícios de fala (é…, ãh, hum) e sumindo nas pausas: o áudio continua inteiro.",
     "Sem B-roll e sem whoosh. Se quiser fundo musical, peça um piano baixo com ducking, numa versão à parte."
   ]
 }

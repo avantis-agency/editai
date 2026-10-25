@@ -6,12 +6,12 @@
 //   bun lib/edit-engine/cli.ts from-template <template> <slots.json> <out.spec.json>
 //   bun lib/edit-engine/cli.ts sfx-synth [dir]                       regenerate the provisional SFX
 //   bun lib/edit-engine/cli.ts validate <spec.json>                  structural check only
-//   bun lib/edit-engine/cli.ts transcribe <video> <out.json> [lang]  optional local word timings (editonny faster-whisper)
+//   bun lib/edit-engine/cli.ts transcribe <video> <out.json> [lang] [--hesitations] [--prompt "..."]  optional local word timings (editonny faster-whisper); --hesitations keeps "é…", "ãh", "hum"
 //   bun lib/edit-engine/cli.ts broll-suggest <spec.json> [--project DIR] [--out F]   automatic B-roll: client media by spoken word + editonny cards (exit 3: no editonny, media only)
 //   bun lib/edit-engine/cli.ts broll-render <spec.json> [--project DIR] [--out F]    draw the cards (editonny render_visuals) into the project cache
 //   bun lib/edit-engine/cli.ts cut <folder|video...> [--project DIR] [--name N] [--lang pt] [--script F] [--fix "a=b"] [--plan F] [--pace tight|natural|reverent] [--fit N] [--denoise off|auto|light|strong] [--no-audit]
 //                                                                    measured cut + standard cleanup (editonny, exit 3 without it; 4 = does not fit N s)
-//   bun lib/edit-engine/cli.ts cut <video...> --continuous [--project DIR] [--script F] [--fix "a=b"] [--denoise off|auto|light]
+//   bun lib/edit-engine/cli.ts cut <video...> --continuous [--project DIR] [--script F] [--fix "a=b"] [--denoise off|auto|light] [--hesitations]
 //                                                                    no cuts (cut "none": sermon, service): sources whole, measured caption words, optional denoise
 //   bun lib/edit-engine/cli.ts audio-check <video...> [--project DIR]  noise, clipping and echo before editing (editonny noise_check)
 //   bun lib/edit-engine/cli.ts subtitles <spec.json> [--out-dir DIR]   SRT + VTT from the caption words, checked
@@ -43,7 +43,7 @@ import { runQa } from "./qa.ts";
 import { synthAll } from "./sfx-synth.ts";
 import { loadSpec, validateSpec } from "./spec.ts";
 import { expandSlotPaths, fillTemplate, loadTemplate } from "./template.ts";
-import { transcribe } from "./transcribe.ts";
+import { HESITATION_PROMPT, transcribe } from "./transcribe.ts";
 import { startPreview, stopPreview } from "./preview-server.ts";
 import { applyFeedback } from "./apply-feedback.ts";
 import { runThBatch } from "./th-batch.ts";
@@ -143,7 +143,9 @@ if (cmd === "agent-inbox" || cmd === "edit-op" || cmd === "agent-reply") {
 } else if (cmd === "cut") {
   const o = { project: flag("--project"), name: flag("--name"), lang: flag("--lang"), script: flag("--script"), fix: flag("--fix"), plan: flag("--plan"), pace: flag("--pace"),
     fit: flag("--fit"), denoise: flag("--denoise"), prompt: flag("--prompt"), noAudit: flag("--no-audit") !== undefined, dryRun: flag("--dry-run") !== undefined,
-    continuous: flag("--continuous") !== undefined };
+    continuous: flag("--continuous") !== undefined, hesitations: flag("--hesitations") !== undefined };
+  // --hesitations (2.4.0): the transcriber keeps "é…", "ãh", "hum" as words, so captions.drop_fillers can take them out
+  if (o.hesitations) o.prompt = [HESITATION_PROMPT[o.lang === "en" ? "en" : "pt"], o.prompt].filter(Boolean).join(" ");
   const inputs = argv.slice(1);
   if (!inputs.length) usage();
   if (o.pace && !["tight", "natural", "reverent"].includes(o.pace)) { console.error("--pace tight|natural|reverent"); process.exit(2); }
@@ -312,6 +314,7 @@ if (cmd === "agent-inbox" || cmd === "edit-op" || cmd === "agent-reply") {
     }
   }
 } else {
+const hesitations = flag("--hesitations") !== undefined, promptArg = flag("--prompt");
 const [, a, b, c] = argv;
 switch (cmd) {
   case "render": {
@@ -361,7 +364,7 @@ switch (cmd) {
   }
   case "transcribe": {
     if (!a || !b) usage();
-    const r = transcribe(a, b, c);
+    const r = transcribe(a, b, c, { hesitations, prompt: promptArg || undefined });
     if (!r.ok) { console.error(`transcribe: ${r.reason}\nfallback: supply word timings from another transcriber and check phrase onsets on the waveform`); process.exit(3); }
     console.log(`${r.words.length} words, ${r.engine}, ${r.seconds?.toFixed(1)} s -> ${b}`);
     break;

@@ -86,6 +86,23 @@ export function materializeFaces(s: EditSpec, cacheRoot: string): string[] {
   const notes: string[] = [];
   const { width: W, height: H } = s.canvas;
   let u: Rect | null = null, samples = 0;
+  for (const { r } of canvasFaces(s, cacheRoot, notes)) {
+    samples++;
+    u = u ? { x: Math.min(u.x, r.x), y: Math.min(u.y, r.y), w: Math.max(u.x + u.w, r.x + r.w) - Math.min(u.x, r.x), h: Math.max(u.y + u.h, r.y + r.h) - Math.min(u.y, r.y) } : r;
+  }
+  if (u) {
+    const pad = 12, x = Math.max(0, u.x - pad), y = Math.max(0, u.y - pad);
+    s.protect_regions = [{ label: `rosto medido (track_faces, ${samples} amostras)`, x, y, w: Math.min(W, u.x + u.w + pad) - x, h: Math.min(H, u.y + u.h + pad) - y }];
+  }
+  return notes;
+}
+
+/**
+ * Every measured face sample of the full-frame takes, on the canvas and on the timeline (editonny track_faces,
+ * cached per source in cacheRoot). Notes get the takes that could not be measured.
+ */
+function canvasFaces(s: EditSpec, cacheRoot: string, notes: string[]): { t: number; r: Rect }[] {
+  const { width: W, height: H } = s.canvas, out: { t: number; r: Rect }[] = [];
   for (const l of fullTakes(s)) {
     if (!existsSync(l.src)) continue;
     const st = statSync(l.src);
@@ -104,16 +121,17 @@ export function materializeFaces(s: EditSpec, cacheRoot: string): string[] {
     const a = l.in ?? 0, b = a + l.duration * (l.speed ?? 1);
     for (const f of faces) {
       if (f[0] < a || f[0] > b || !f[5]) continue;
-      const r = m.toCanvas({ x: f[1] - f[3] / 2, y: f[2] - f[4] / 2, w: f[3], h: f[4] });
-      samples++;
-      u = u ? { x: Math.min(u.x, r.x), y: Math.min(u.y, r.y), w: Math.max(u.x + u.w, r.x + r.w) - Math.min(u.x, r.x), h: Math.max(u.y + u.h, r.y + r.h) - Math.min(u.y, r.y) } : r;
+      out.push({ t: l.start + (f[0] - a) / (l.speed ?? 1), r: m.toCanvas({ x: f[1] - f[3] / 2, y: f[2] - f[4] / 2, w: f[3], h: f[4] }) });
     }
   }
-  if (u) {
-    const pad = 12, x = Math.max(0, u.x - pad), y = Math.max(0, u.y - pad);
-    s.protect_regions = [{ label: `rosto medido (track_faces, ${samples} amostras)`, x, y, w: Math.min(W, u.x + u.w + pad) - x, h: Math.min(H, u.y + u.h + pad) - y }];
-  }
-  return notes;
+  return out;
+}
+
+/** 2.4.0: the face samples of a horizontal canvas (no reframe) for the centred caption line; null when none was measured. */
+export function faceSamples(s: EditSpec, cacheRoot: string, notes: string[] = []): { t: number; r: Rect }[] | null {
+  if (!s.canvas || typeof s.canvas !== "object" || !isLandscape(s.canvas) || reframeOn(s)) return null;
+  const f = canvasFaces(s, cacheRoot, notes);
+  return f.length ? f : null;
 }
 
 // ── QA ───────────────────────────────────────────────────────────────────────────
@@ -122,7 +140,8 @@ export interface CanvasCheck { id: string; blocking: boolean; pass: boolean; det
 
 /** Horizontal canvas: every caption group inside the lower third (measured boxes from the QA). */
 export function landscapeChecks(s: EditSpec, groups: { text: string; at: number; box: Rect | null }[]): CanvasCheck[] {
-  if (!isLandscape(s.canvas) || !groups.length) return [];
+  // 2.4.0: a caption line asked for the centre is checked by captions_center (captions.ts) instead
+  if (!isLandscape(s.canvas) || !groups.length || s.captions?.position === "center") return [];
   const H = s.canvas.height, top = Math.round((2 * H) / 3);
   const high = groups.filter((g) => g.box && g.box.y < top);
   return [{ id: "captions_lower_third", blocking: true, pass: high.length === 0,
@@ -191,11 +210,14 @@ function renderedContrast(s: EditSpec, video: string, at: number, box: Rect, wor
   const ev = (n: number) => Math.floor(n / 2) * 2;
   const x = ev(Math.max(0, box.x - pad)), y = ev(Math.max(0, box.y - pad)), w = ev(Math.min(W - x, box.w + 2 * pad + 1)), h = ev(Math.min(H - y, box.h + 2 * pad + 1));
   const gray = (args: string[], cwd?: string) => { const r = Bun.spawnSync(["ffmpeg", "-v", "error", "-nostdin", ...args, "-frames:v", "1", "-f", "rawvideo", "-"], { cwd, stdout: "pipe", stderr: "pipe" }); return r.exitCode === 0 ? r.stdout : null; };
-  const fin = gray(["-ss", at.toFixed(3), "-i", video, "-vf", `crop=${w}:${h}:${x}:${y},format=gray`]);
+  // 2.4.0: both reads on the same video frame (the mask used to run at 25 fps, so a word shorter than a frame could be
+  // read against the next word's mask); the seek lands a quarter frame before the frame, which ffmpeg then returns
+  const fps = s.canvas.fps || 30, t0 = Math.round(at * fps) / fps - 0.25 / fps;
+  const fin = gray(["-ss", t0.toFixed(4), "-i", video, "-vf", `crop=${w}:${h}:${x}:${y},format=gray`]);
   mkdirSync(work, { recursive: true });
   writeFileSync(join(work, "mask-contrast.ass"), buildAss(s, { mask: true, only: "captions" }), "utf8");
-  const mask = gray(["-f", "lavfi", "-i", `color=c=black:s=${W}x${H}:r=25:d=${(at + 0.2).toFixed(2)}`,
-    "-vf", `ass=mask-contrast.ass:fontsdir=${fontsDirFor(work, s)},trim=start=${at.toFixed(2)},setpts=PTS-STARTPTS,crop=${w}:${h}:${x}:${y},format=gray`], work);
+  const mask = gray(["-f", "lavfi", "-i", `color=c=black:s=${W}x${H}:r=${fps}:d=${(at + 0.2).toFixed(2)}`,
+    "-vf", `ass=mask-contrast.ass:fontsdir=${fontsDirFor(work, s)},trim=start=${t0.toFixed(4)},setpts=PTS-STARTPTS,crop=${w}:${h}:${x}:${y},format=gray`], work);
   if (!fin || !mask || fin.length !== w * h || mask.length !== w * h) return null;
   const R = 5;
   let ts = 0, tn = 0, rs = 0, rn = 0;

@@ -56,7 +56,7 @@ import { resolveContinuous } from "./continuous.ts";
 import { probe } from "./measure.ts";
 import { platformOrientation } from "./safezones.ts";
 
-type Word = { word: string; start: number; end: number; emphasis?: boolean };
+type Word = { word: string; start: number; end: number; emphasis?: boolean; filler?: boolean; filler_why?: string };
 export interface Take { src: string; in: number; duration: number; framing?: string; audio_src?: string }  // cut "none": in and duration may be left out (the whole source)
 export interface ThItem {
   id: string; hook_lines: string[]; takes: Take[]; words?: Word[]; words_files?: Record<string, string>;
@@ -79,7 +79,8 @@ function shiftWords(words: Word[], take: Take, at: number): Word[] {
   const a = take.in, b = take.in + take.duration;
   // a word belongs to the take that holds its midpoint (a transcriber start can sit a few frames before the cut)
   return words.filter((w) => (w.start + w.end) / 2 >= a && (w.start + w.end) / 2 < b)
-    .map((w) => ({ word: w.word, start: r3(Math.max(at, w.start - a + at)), end: r3(Math.min(at + take.duration, w.end - a + at)) }));
+    .map((w) => ({ word: w.word, start: r3(Math.max(at, w.start - a + at)), end: r3(Math.min(at + take.duration, w.end - a + at)),
+      ...(w.filler !== undefined ? { filler: w.filler, ...(w.filler_why ? { filler_why: w.filler_why } : {}) } : {}) })); // 2.4.0: the filler decision travels with the word
 }
 
 /** Words for the item: given on the timeline, from per-clip files, or transcribed (cached next to the output). */
@@ -227,7 +228,7 @@ function toLandscape(spec: EditSpec, slots: Record<string, unknown>): string[] {
     spec.platforms = kept.length ? kept : ["youtube_16x9", "screen_16x9"];
   }
   if (spec.protect_regions?.length && slots.protect_regions === undefined) { spec.protect_regions = []; log.push("protect_regions of the 9:16 layout dropped: the face is measured on the 16:9 picture"); }
-  log.push(`canvas ${W}x${H}${spec.canvas_request ? ` (${spec.canvas_request})` : ""}: captions at y ${spec.captions?.y ?? "-"}, lower third`);
+  log.push(`canvas ${W}x${H}${spec.canvas_request ? ` (${spec.canvas_request})` : ""}: captions ${spec.captions?.position === "center" ? "in the centre (position center)" : `at y ${spec.captions?.y ?? "-"}, lower third`}`);
   return log;
 }
 

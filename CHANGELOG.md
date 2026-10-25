@@ -1,5 +1,45 @@
 # Changelog
 
+## 2.4.0 (2026-10-25)
+
+Legenda sem vícios, que some nas pausas e fica no centro. É o 2º retorno da editora cliente sobre o vídeo da ministração: "a legenda tem uns vícios, tipo: é… oh…" e "ela teria que ser centralizada no meio do vídeo" (trace `editai-igreja-v3-20261025-133547`). Só a legenda muda: o áudio e o vídeo continuam inteiros. Testado só no Windows 10, com o editonny 1.0.0. A gravação não entrou no squad.
+
+### novo
+
+- **`captions.drop_fillers`** (`lib/edit-engine/captions.ts`): os vícios saem da legenda e do SRT. Há listas em PT e EN (`captions.lang`, ou a língua adivinhada pelas palavras).
+  - As hesitações puras (ãh, éh, hum, hm / um, uh, er) saem sempre.
+  - As palavras que também são da frase (é, ou, o, né, tipo, oh, ah / like, so, well) só saem com `filler: true` na palavra (a decisão de quem ouviu, com `filler_why`) ou quando o transcritor as escreveu como vogal arrastada ("éé").
+  - `filler: false` segura qualquer palavra.
+  - O que saiu fica em `captions.dropped`, e desligar a opção devolve tudo.
+  - QA `caption_fillers`.
+- **`captions.hide_in_pauses`** (preset `word`): o render mede a voz no mesmo envelope de 10 ms do `caption_sync`. A palavra que antecede uma pausa de 0,3 s ou mais termina onde a voz para (`pause_after`), com 80 ms de folga, e não emenda na próxima. QA `caption_pauses`: nenhuma palavra na tela dentro de uma pausa medida, com 120 ms de folga nas bordas.
+- **`captions.position`:** `"center"` (meio da tela) ou `"lower_third"` (o lugar da 2.3.0). O QA `captions_center` substitui o `captions_lower_third` quando a legenda está no centro. No 16:9, uma palavra que cobriria o rosto naquele instante sobe ou desce o mínimo, só naquele trecho (`captions.face_shifts`, nas notas), e o QA `caption_face` confere palavra por palavra contra as amostras do `track_faces`.
+- **Transcrição que mantém as hesitações:** `cli.ts transcribe ... --hesitations` e `cut ... --continuous --hesitations`. Usam um prompt inicial em PT ou EN com hesitações e uma pasta de cache própria, então a primeira transcrição não é sobrescrita.
+- **Perfis:** com o preset `word`, o perfil de estilo liga `drop_fillers` e `hide_in_pauses`. Com `position: "center"`, o halo da sombra fica um pouco mais forte (desfoque 7 a 90%, contra 6 a 85%). O nicho `church-ministry` e o exemplo `ministracao` passam a usar `position: "center"`, e o plano do briefing diz isso.
+- **Mini editor:** a palavra some na pausa e acompanha o deslocamento pelo rosto, como no render.
+
+### decisões
+
+- **Palavra gramatical nunca sai pela lista.** No vídeo da igreja, nenhuma das duas transcrições escreveu hesitação, e os "vícios" que a cliente viu eram palavras da frase em lugar errado. O "é" aparecia em cima do "s" de "nós", e o "o", 0,6 s antes do "shalom", no fim de "Deus": as duas ficavam sozinhas no silêncio. O EditAi só tira o que é hesitação certa. O resto é decisão de quem ouviu, registrada na palavra.
+- **Campos ausentes = 2.3.0.** O spec da v2 da igreja, re-renderizado, dá os mesmos bytes (`71176fcf…`). O padrão "ligado" mora no perfil de estilo, que é quem escreve o preset `word` nos specs novos.
+- **A pausa é medida, não lida do transcritor.** O fim que o Whisper dá às palavras não diz onde a voz para. O render mede a voz e encurta a palavra até onde a pausa começa.
+- **Sombra mais forte no centro.** No meio do quadro, a palavra fica sobre a camisa. Com a sombra da 2.3.0, três palavras ficavam abaixo de 4,5:1 (WCAG AA). Desfoque 7 a 90% foi o mínimo que deixou todas acima disso (5,5:1 na fonte; 6,7:1 no vídeo).
+
+### corrigido
+
+- `caption_sync` (2.3.0): a regex que lê os eventos do `.ass` tinha perdido as barras (`(d+):(dd)`). A parte "evento no início da palavra" não lia nenhum evento e passava vazia. Agora lê: desvio máximo de 3 ms na igreja v3.
+- `caption_background`: a máscara do contraste rodava a 25 fps e o vídeo a 30. Uma palavra mais curta que um quadro era comparada com a palavra seguinte (deu 1,8:1 no "pra" de 20 ms). As duas leituras agora caem no mesmo quadro.
+- `th-batch`: a palavra passada de um take para a linha do tempo leva junto `filler` e `filler_why`.
+
+### alterado
+
+- `spec.ts`, `ass.ts`, `ffmpeg.ts`, `canvas.ts`, `qa.ts`, `continuous.ts`, `style.ts`, `th-batch.ts`, `briefing.ts`, `transcribe.ts`, `cli.ts`, `editor.ts`, `preview/editor/model.mjs`; novo `captions.ts`. Também `templates/niches/church-ministry.json`, `examples/profiles/ministracao.example.json`, README (PT e EN) e `squad.yaml` 2.4.0 (só a versão).
+
+### não mudou
+
+- Sem `drop_fillers`, `hide_in_pauses` e `position` no spec, o `.ass` e o filtergraph são os mesmos de antes. Regressões idênticas byte a byte: v2 `3a95058d…`, fumaça `b21e3618…` e `27f556fd…`, `mode off` `3a95058d…`, e a igreja v2 pelo spec antigo `71176fcf…` (piano `0f73ec64…`).
+- O editonny e os outros squads não foram tocados.
+
 ## 2.3.0 (2026-10-25)
 
 Vídeo deitado (16:9), modo sem cortes, legenda uma palavra por vez e fonte do usuário. Pedido do usuário, repassando o retorno de uma editora cliente sobre o vídeo de uma ministração: manter a proporção horizontal do original, sem cortes, legenda palavra por palavra branca com sombra preta leve em negrito numa fonte dela, sem a headline e sem a faixa (trace `editai-igreja-v2-20261025-115129`). É a parte mínima da onda 5 da auditoria que esse caso pede (`PLANO-ONDAS.md`). Testado só no Windows 10, com o editonny 1.0.0 instalado. A gravação e a fonte da cliente não entraram no squad.
