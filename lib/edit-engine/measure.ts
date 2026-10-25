@@ -1,7 +1,7 @@
 // Measurements with ffmpeg/ffprobe: probe, text bounding box, loudness.
 // Every number the QA reports comes from one of these functions. Bun only.
 import { mkdirSync, writeFileSync, copyFileSync, existsSync, readdirSync } from "node:fs";
-import { join, relative, isAbsolute } from "node:path";
+import { basename, join, relative, isAbsolute } from "node:path";
 import { buildAss } from "./ass.ts";
 import { FONTS_DIR, type EditSpec, type Rect } from "./spec.ts";
 
@@ -44,8 +44,20 @@ export function hasAudio(file: string): boolean {
   return r.out.trim().length > 0;
 }
 
-/** Make fonts reachable from `workdir` through a relative path (libass fontsdir). */
-export function fontsDirFor(workdir: string): string {
+/**
+ * Make fonts reachable from `workdir` through a relative path (libass fontsdir). With user fonts (2.3.0,
+ * spec.fonts.found) the squad fonts and the user files are copied into <workdir>/fonts: the render work
+ * folder sits next to the output, never in the squad.
+ */
+export function fontsDirFor(workdir: string, spec?: EditSpec): string {
+  const user = spec?.fonts?.found ?? [];
+  if (user.length) {
+    const local = join(workdir, "fonts");
+    mkdirSync(local, { recursive: true });
+    for (const f of readdirSync(FONTS_DIR)) if (!existsSync(join(local, f))) copyFileSync(join(FONTS_DIR, f), join(local, f));
+    for (const u of user) { const to = join(local, `user-${basename(u.file)}`); if (!existsSync(to)) copyFileSync(u.file, to); }
+    return "fonts";
+  }
   const rel = relative(workdir, FONTS_DIR);
   if (rel && !isAbsolute(rel) && !/^[a-z]:/i.test(rel)) return rel.replace(/\\/g, "/");
   const local = join(workdir, "fonts");
@@ -65,7 +77,7 @@ export function measureTextBox(spec: EditSpec, layerId: string, at: number, work
   writeFileSync(join(workdir, name), buildAss(spec, { mask: true, only: layerId }), "utf8");
   const { width: W, height: H } = spec.canvas;
   const err = ffmpeg(["-f", "lavfi", "-i", `color=c=black:s=${W}x${H}:r=25:d=${(at + 0.2).toFixed(2)}`,
-    "-vf", `ass=${name}:fontsdir=${fontsDirFor(workdir)},trim=start=${at.toFixed(2)},setpts=PTS-STARTPTS,bbox=min_val=60`,
+    "-vf", `ass=${name}:fontsdir=${fontsDirFor(workdir, spec)},trim=start=${at.toFixed(2)},setpts=PTS-STARTPTS,bbox=min_val=60`,
     "-frames:v", "1", "-f", "null", "-"], workdir);
   const m = [...err.matchAll(/x1:(\d+) x2:(\d+) y1:(\d+) y2:(\d+)/g)].pop();
   if (!m) return null;

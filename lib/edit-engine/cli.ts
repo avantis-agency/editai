@@ -11,6 +11,8 @@
 //   bun lib/edit-engine/cli.ts broll-render <spec.json> [--project DIR] [--out F]    draw the cards (editonny render_visuals) into the project cache
 //   bun lib/edit-engine/cli.ts cut <folder|video...> [--project DIR] [--name N] [--lang pt] [--script F] [--fix "a=b"] [--plan F] [--pace tight|natural|reverent] [--fit N] [--denoise off|auto|light|strong] [--no-audit]
 //                                                                    measured cut + standard cleanup (editonny, exit 3 without it; 4 = does not fit N s)
+//   bun lib/edit-engine/cli.ts cut <video...> --continuous [--project DIR] [--script F] [--fix "a=b"] [--denoise off|auto|light]
+//                                                                    no cuts (cut "none": sermon, service): sources whole, measured caption words, optional denoise
 //   bun lib/edit-engine/cli.ts audio-check <video...> [--project DIR]  noise, clipping and echo before editing (editonny noise_check)
 //   bun lib/edit-engine/cli.ts subtitles <spec.json> [--out-dir DIR]   SRT + VTT from the caption words, checked
 //   bun lib/edit-engine/cli.ts reframe <spec.json> [--project DIR] [--out F]   measure the face path of wider sources (spec.reframe follow-face)
@@ -140,7 +142,8 @@ if (cmd === "agent-inbox" || cmd === "edit-op" || cmd === "agent-reply") {
   process.exit(code);
 } else if (cmd === "cut") {
   const o = { project: flag("--project"), name: flag("--name"), lang: flag("--lang"), script: flag("--script"), fix: flag("--fix"), plan: flag("--plan"), pace: flag("--pace"),
-    fit: flag("--fit"), denoise: flag("--denoise"), prompt: flag("--prompt"), noAudit: flag("--no-audit") !== undefined, dryRun: flag("--dry-run") !== undefined };
+    fit: flag("--fit"), denoise: flag("--denoise"), prompt: flag("--prompt"), noAudit: flag("--no-audit") !== undefined, dryRun: flag("--dry-run") !== undefined,
+    continuous: flag("--continuous") !== undefined };
   const inputs = argv.slice(1);
   if (!inputs.length) usage();
   if (o.pace && !["tight", "natural", "reverent"].includes(o.pace)) { console.error("--pace tight|natural|reverent"); process.exit(2); }
@@ -148,8 +151,14 @@ if (cmd === "agent-inbox" || cmd === "edit-op" || cmd === "agent-reply") {
   const script = o.script ? (existsSync(o.script) ? readFileSync(o.script, "utf8") : o.script) : undefined;
   const r = await runCut({ inputs, project: projectDir(o.project || undefined), name: o.name || undefined, lang: o.lang || undefined, script, fix: parseFix(o.fix),
     plan: o.plan ? JSON.parse(readFileSync(o.plan, "utf8")) : undefined, pace: (o.pace || undefined) as Pace | undefined, fit: o.fit ? Number(o.fit) : undefined,
-    denoise: (o.denoise || undefined) as any, prompt: o.prompt || undefined, audit: !o.noAudit, dryRun: o.dryRun });
+    denoise: (o.denoise || undefined) as any, prompt: o.prompt || undefined, audit: !o.noAudit, dryRun: o.dryRun, continuous: o.continuous });
   if (r.exit === 3) { console.error(r.notes.join("\n")); process.exit(3); }
+  if (r.mode === "none") {
+    console.log(`contínuo (cut none): ${r.duration.final.toFixed(3)} s, ${r.takes.length} take(s) inteiro(s), denoise ${r.denoise.mode}`);
+    for (const n of r.notes) console.log(`  nota ${n}`);
+    console.log(`relatório: ${join(r.dir, "CORTE.md")}\nno th-batch: "cut": "${fwd(join(r.dir, "cut.json"))}"`);
+    process.exit(0);
+  }
   console.log(`corte: ${r.duration.raw.toFixed(1)} s brutos -> rascunho ${r.duration.draft.toFixed(1)} s -> final ${r.duration.final.toFixed(1)} s (${r.takes.length} takes, ritmo ${r.pace})`);
   for (const x of r.removed) console.log(`  saiu  ${x.source} ${x.start.toFixed(2)}-${x.end.toFixed(2)} "${x.text}" · ${x.why}`);
   for (const x of r.kept_against_draft) console.log(`  ficou ${x.source} ${x.start.toFixed(2)}-${x.end.toFixed(2)} "${x.text}" · ${x.why}`);

@@ -34,8 +34,13 @@ export interface StyleProfile {
   measurements_dir: string;
   measured: Record<string, unknown>;
   apply: {
-    cut: { zoom_cut_every_s: number | null; punch_amount: number };
-    captions: { enabled: boolean; preset: "bold-word" | "classic"; font_px: number; y: number; uppercase: boolean; emphasis_color: string | null; box: boolean };
+    /** mode (2.3.0): "none" = continuous, no cuts (lib/edit-engine/continuous.ts); absent = the standard cleanup */
+    cut: { zoom_cut_every_s: number | null; punch_amount: number; mode?: "standard" | "none" };
+    /** 2.3.0: word = one word at a time; font_family may be a font the person supplies (font_fallback while it is missing) */
+    captions: { enabled: boolean; preset: "bold-word" | "classic" | "word"; font_px: number; y: number; uppercase: boolean; emphasis_color: string | null; box: boolean;
+      font_family?: string; font_fallback?: string; color?: string };
+    /** 2.3.0: output size (a name of lib/edit-engine/canvas.ts); absent = the template's 1080x1920 */
+    canvas?: "1080x1920" | "1920x1080" | "same-as-source";
     headline: { mode: "fixed" | "intro" | "none"; y: number; font_px: number; font_family: "Anton" | "Inter" };
     music: { enabled: boolean; mood: Mood | null; below_voice_db: number };
     sfx: { cut_whoosh: boolean; gain_db: number };
@@ -240,7 +245,9 @@ export function validateStyle(p: StyleProfile): string[] {
   if (!a) return [...e, "apply missing"];
   if (a.cut.zoom_cut_every_s !== null && !(a.cut.zoom_cut_every_s >= 0.9 && a.cut.zoom_cut_every_s <= 6)) e.push("apply.cut.zoom_cut_every_s must be null or in [0.9, 6]");
   if (!(a.cut.punch_amount >= 0 && a.cut.punch_amount <= 0.15)) e.push("apply.cut.punch_amount must be in [0, 0.15]");
-  if (!["bold-word", "classic"].includes(a.captions.preset)) e.push("apply.captions.preset must be bold-word or classic");
+  if (!["bold-word", "classic", "word"].includes(a.captions.preset)) e.push("apply.captions.preset must be bold-word, classic or word");
+  if (a.cut.mode !== undefined && !["standard", "none"].includes(a.cut.mode)) e.push("apply.cut.mode must be standard or none");
+  if (a.canvas !== undefined && !["1080x1920", "1920x1080", "same-as-source"].includes(a.canvas)) e.push("apply.canvas must be 1080x1920, 1920x1080 or same-as-source");
   if (!(a.captions.font_px >= 48 && a.captions.font_px <= 110)) e.push("apply.captions.font_px must be in [48, 110]");
   if (!["fixed", "intro", "none"].includes(a.headline.mode)) e.push("apply.headline.mode must be fixed, intro or none");
   if (!(a.headline.font_px >= 60 && a.headline.font_px <= 130)) e.push("apply.headline.font_px must be in [60, 130]");
@@ -270,7 +277,9 @@ export function styleReport(p: StyleProfile): string {
     `- Ritmo: ${m.pacing ? `${m.pacing.cuts_per_minute} cortes por minuto, ${pt(m.pacing.mean_shot_s, 2)} s por plano na referência` : "não medido"}; ${a.cut.zoom_cut_every_s ? `corte de zoom a cada ~${pt(a.cut.zoom_cut_every_s)} s nas pausas da fala` : "sem cortes extras"}${o("cut.zoom_cut_every_s")}.`,
     `- Zoom: ${a.cut.punch_amount ? `alterna 100/${Math.round(100 + a.cut.punch_amount * 100)} % nos cortes` : "sem zoom alternado"}${o("cut.punch_amount")}.`,
     `- Headline: ${a.headline.mode === "none" ? "sem headline" : `${a.headline.mode === "fixed" ? "fixa no vídeo todo" : "só nos 3 primeiros segundos"}, y ${a.headline.y}, ${a.headline.font_px} px, ${a.headline.font_family}`}${o("headline.mode")}. O texto vem do seu material, nunca da referência.`,
-    `- Legenda: ${a.captions.enabled ? `${a.captions.preset === "bold-word" ? "palavra que cresce, caixa alta" : "clássica"}, y ${a.captions.y}, ${a.captions.font_px} px${a.captions.box ? ", com caixa" : ""}${a.captions.emphasis_color ? `, destaque ${a.captions.emphasis_color}` : ""}` : "sem legenda"}${o("captions.enabled")}.`,
+    ...(a.cut.mode === "none" ? ["- Corte: nenhum (contínuo): o vídeo passa inteiro, sem tirar pausa, sem zoom e sem reframe."] : []),
+    ...(a.canvas ? [`- Proporção: ${a.canvas === "same-as-source" ? "a do vídeo original" : a.canvas}.`] : []),
+    `- Legenda: ${a.captions.enabled ? `${a.captions.preset === "bold-word" ? "palavra que cresce, caixa alta" : a.captions.preset === "word" ? `uma palavra por vez, ${a.captions.font_family ?? "Inter"}${a.captions.font_fallback ? ` (sem o arquivo, ${a.captions.font_fallback})` : ""}, branca com sombra suave` : "clássica"}, y ${a.captions.y}, ${a.captions.font_px} px${a.captions.box ? ", com caixa" : ""}${a.captions.emphasis_color ? `, destaque ${a.captions.emphasis_color}` : ""}` : "sem legenda"}${o("captions.enabled")}.`,
     `- Música: ${a.music.enabled ? `clima ${a.music.mood} da biblioteca, ${a.music.below_voice_db} LU abaixo da voz` : "sem música"}${o("music.enabled")}.`,
     `- Efeitos: ${a.sfx.cut_whoosh ? `whoosh baixo (${a.sfx.gain_db} dB) nas trocas de clipe` : "sem efeitos nas viradas"}${o("sfx.cut_whoosh")}.`,
     "", "## Medido e guardado, mas não aplicado", "",
@@ -386,6 +395,15 @@ export function applyStyleToSpec(spec: EditSpec, p: StyleProfile): string[] {
   // captions
   const c = spec.captions;
   if (c && !a.captions.enabled) { delete spec.captions; dropHooks("caption_bold_word", "caption_word_highlight"); log.push("captions: off (the reference has no caption line)"); }
+  else if (c && a.captions.preset === "word") {
+    // word (2.3.0): one word at a time, white, bold, soft black shadow, no outline and no keyword colour
+    const fam = a.captions.font_family ?? "Inter";
+    c.preset = "word"; c.max_words = 1; c.highlight_active = false; delete c.emphasis_color; delete c.max_width_px;
+    c.style = { font_family: fam, ...(fam !== "Inter" ? { font_fallback: a.captions.font_fallback ?? "Inter" } : {}), font_px: a.captions.font_px, size_basis: "em", bold: true,
+      color: a.captions.color ?? "#ffffff", outline_px: 0, shadow_px: 3, shadow_blur: 6, shadow_color: "#000000", shadow_alpha: 0.85, uppercase: a.captions.uppercase };
+    spec.hooks_applied = spec.hooks_applied.map((h) => (["caption_bold_word", "caption_word_highlight"].includes(h.hook) ? { hook: "caption_single_word", at: h.at, why: `${p.name}: one word at a time, white with a soft black shadow, ${fam}` } : h));
+    log.push(`captions: one word at a time, ${fam}${fam !== "Inter" ? ` (fallback ${a.captions.font_fallback ?? "Inter"} while the file is missing)` : ""}, white with a soft shadow`);
+  }
   else if (c) {
     c.style.uppercase = a.captions.uppercase || a.captions.preset === "bold-word";
     c.style.font_family = a.captions.preset === "bold-word" ? "Anton" : "Inter";

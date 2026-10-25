@@ -9,6 +9,7 @@ import { fitTexts, type FitLog } from "./safezones.ts";
 import { adjacent, assertValid, musicPath, sfxStart, takes, type CameraMove, type EditSpec, type MediaLayer } from "./spec.ts";
 import { materializeBroll } from "./broll.ts";
 import { materializeReframe, reframeChain } from "./reframe.ts";
+import { materializeFaces } from "./canvas.ts";
 
 const f3 = (n: number) => Number(n.toFixed(3)).toString();
 const SS = 2; // zoompan supersampling, limits sub-pixel jitter on slow pushes
@@ -210,6 +211,8 @@ export async function render(spec: EditSpec, outMp4: string, opts: RenderOptions
   // reframe (2.2.0): the face path of each wider source (editonny track_faces), cached; nothing when absent or "off"
   if (spec.reframe && spec.reframe.mode !== "off") { stageOf(opts)("reframe"); materializeReframe(spec, join(outDir, ".editai-reframe-cache")); }
   assertValid(spec);
+  // horizontal canvas (2.3.0): the measured face becomes the region text must not cover (nothing on a 9:16 canvas)
+  const faceNotes = materializeFaces(spec, join(outDir, ".editai-faces-cache"));
   const work = join(outDir, `.work-${spec.id}`);
   mkdirSync(work, { recursive: true });
   const { width: W, height: H, fps } = spec.canvas;
@@ -278,7 +281,7 @@ export async function render(spec: EditSpec, outMp4: string, opts: RenderOptions
   for (const f of spec.flashes ?? []) {
     post.push(`drawbox=x=0:y=0:w=iw:h=ih:color=${f.color ?? "white"}@${f.opacity ?? 0.85}:t=fill:enable='between(t,${f3(f.at)},${f3(f.at + f.duration)})'`);
   }
-  if (!opts.noText && (spec.texts.length || spec.captions)) post.push(`ass=edit.ass:fontsdir=${fontsDirFor(work)}`);
+  if (!opts.noText && (spec.texts.length || spec.captions)) post.push(`ass=edit.ass:fontsdir=${fontsDirFor(work, spec)}`);
   post.push("format=yuv420p");
   const broll = spec.layers.filter((l) => l.broll);
   if (!broll.length) graph.push(`[${cur}]${post.join(",")}[vout]`);
@@ -313,6 +316,7 @@ export async function render(spec: EditSpec, outMp4: string, opts: RenderOptions
   const mutes = (a.mutes ?? []).map((m) => `volume=enable='between(t,${f3(m.start)},${f3(m.end)})':volume=0`).join(",");
   const notes: string[] = [];
   if (droppedSfx) notes.push(`${droppedSfx} sfx marked only_with_music left out: the spec has no music`);
+  notes.push(...faceNotes);
 
   let bed: string | null = null;
   if (a.music) {

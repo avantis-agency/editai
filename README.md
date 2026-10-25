@@ -6,9 +6,9 @@
 
 ## Português
 
-**EditAi** (de "edita aí" e de "Edit AI") é um estúdio de edição de retenção para vídeo curto, como squad do Nirvana-OS. Você entra com clipe, foto ou gravação de tela e sai com um MP4 9:16 (1080x1920, H.264, 30 fps) editado com ganchos de catálogo. Junto vêm o edit spec JSON que gerou o vídeo e um relatório de QA medido: áreas seguras das plataformas, tamanho e tempo de texto, -14 LUFS, codec. Ele também mantém os pipelines de geração com IA herdados do `nirvana-video-creator`, todos terminando no mesmo passe de edição. Serve para qualquer nicho: clínica, restaurante, loja, curso, imobiliária, marca pessoal.
+**EditAi** (de "edita aí" e de "Edit AI") é um estúdio de edição de retenção para vídeo curto, como squad do Nirvana-OS. Você entra com clipe, foto ou gravação de tela e sai com um MP4 9:16 (1080x1920, H.264, 30 fps), ou 16:9 desde a 2.3.0, editado com ganchos de catálogo. Junto vêm o edit spec JSON que gerou o vídeo e um relatório de QA medido: áreas seguras das plataformas, tamanho e tempo de texto, -14 LUFS, codec. Ele também mantém os pipelines de geração com IA herdados do `nirvana-video-creator`, todos terminando no mesmo passe de edição. Serve para qualquer nicho: clínica, restaurante, loja, curso, imobiliária, marca pessoal.
 
-Versão 2.2.0. Protocolo de squad 6.0. Prefixo `editai`. Cerca de 25 MB. A 2.2.0 traz o corte medido com a limpeza padrão (onda 2 da fusão com o editonny) e a gravação deitada em vertical seguindo o rosto; a 2.1.0 trouxe o B-roll automático (onda 1). A 2.0.0 trocou o nome, a pasta do squad, a pasta no seu projeto e o cache; projetos e downloads de antes continuam funcionando (veja a entrada 2.0.0 do CHANGELOG).
+Versão 2.3.0. Protocolo de squad 6.0. Prefixo `editai`. Cerca de 25 MB. A 2.3.0 traz o vídeo deitado (16:9), o modo sem cortes para ministração e culto, a legenda uma palavra por vez e a fonte do próprio usuário. A 2.2.0 trouxe o corte medido com a limpeza padrão (onda 2 da fusão com o editonny) e a gravação deitada em vertical seguindo o rosto; a 2.1.0 trouxe o B-roll automático (onda 1). A 2.0.0 trocou o nome, a pasta do squad, a pasta no seu projeto e o cache; projetos e downloads de antes continuam funcionando (veja a entrada 2.0.0 do CHANGELOG).
 
 ### Instalar
 
@@ -176,6 +176,23 @@ Legenda em arquivo: `bun lib/edit-engine/cli.ts subtitles video.spec.json` grava
 
 Uma palestra, aula ou pregação gravada em 16:9 vira 9:16 com `"reframe": {"mode": "follow-face"}` no spec ou no item do lote. O rosto é medido 10 vezes por segundo (`track_faces.py` do editonny) e o quadro fica parado enquanto a pessoa balança perto do centro; quando ela anda de verdade, ele viaja com calma até onde ela assenta. A altura da gravação é inteira (o microfone na boca fica). Com `"layout": "band"`, a imagem desce e o topo vira uma faixa desfocada (ou de cor lisa, `"band_style": "solid"`) onde a headline fica longe da cabeça. O QA confere cada amostra do rosto dentro do corte (`reframe_face`); sem editonny, o corte é central e o QA avisa.
 
+### Vídeo deitado e sem cortes (ministração, culto)
+
+Para pregação, ministração ou culto, o vídeo passa inteiro e contínuo, na proporção em que foi gravado. Nenhuma pausa, respiração ou repetição sai, e não há punch-in, zoom nem reframe. Esse modo vence a limpeza padrão, e o briefing liga sozinho quando a mensagem fala em ministração, pregação, culto, sermão, "sem cortes" ou "contínuo" (nicho `church-ministry`).
+
+```bash
+bun lib/edit-engine/cli.ts cut gravação.mp4 --continuous --project <pasta do projeto> --lang pt --script fala.txt --denoise auto
+#   não corta nada: mede o início de cada palavra, aplica a grafia do roteiro e limpa o ruído se o diagnóstico pedir
+```
+
+No lote, o item recebe `"cut": "<cut.json>"` (ou `"cut": "none"` com os takes), `"canvas": "same-as-source"` (ou `"1920x1080"`) e `"hook_lines": []` para não ter headline. Num spec escrito à mão, `"cut": "none"` e `"canvas": "same-as-source"` fazem o mesmo. Os templates 9:16 não mudam: sem `canvas`, o vídeo sai em 1080x1920 como antes.
+
+- **Áreas seguras do 16:9:** `youtube_16x9` (o player do YouTube: barra de progresso e controles embaixo, título em cima, 5% nas laterais) e `screen_16x9` (telão, projetor ou TV: fora dos 90% da área segura de título). Um canvas é medido só contra as plataformas da própria orientação.
+- **Legenda no terço de baixo,** a 83% da altura, sem cobrir o rosto: o rosto é medido pelo editonny (`track_faces.py`) e vira a área protegida. QA `captions_lower_third`.
+- **Legenda uma palavra por vez** (`captions.preset: "word"`): branca, em negrito, com sombra preta suave (um halo desfocado e uma sombra levemente deslocada, sem contorno grosso), no tempo da fala. QA `caption_sync`: cada palavra entra no início dela, e o começo de cada frase fica a até 0,1 s da voz medida na forma de onda. O `caption_background` avisa quando o fundo atrás de uma palavra é claro.
+- **Prova de que não há corte:** `continuous_take` (a fonte inteira, com a mesma duração, 0,1 s de folga) e `no_scene_cut` (o detector de cena `scdet` do ffmpeg não acha no vídeo um corte que a fonte não tem).
+- **Fonte do usuário:** ponha o `.ttf` ou `.otf` em `<projeto>/fonts/` e use `"fonts": {"dir": "fonts"}` no lote. A família sai do próprio arquivo, a licença fica registrada como "fornecida pelo usuário" e a fonte é copiada só para a pasta de trabalho do render, nunca para dentro do squad. Enquanto o arquivo não chega, a legenda usa a substituta declarada (Inter Bold), o QA diz isso (`caption_font`) e o mesmo comando, rodado de novo, já pega a fonte.
+
 ### Música e efeitos sonoros
 
 O índice tem 23 faixas CC0 em 6 climas (calm, chill-beat, emotional, groove, hiphop, upbeat) e 102 efeitos CC0 em 28 categorias, vindos da biblioteca do editonny com a licença lida item a item. Fonte, autor e licença de cada arquivo estão em `LICENSES.md` e `CREDITS.md` de `assets/music/` e `assets/sfx/`.
@@ -243,7 +260,7 @@ Segurança: o texto do pedido é só dado. O motor nunca executa nada que venha 
 
 O agente `edit-briefing-guide` lê o que chegou e pergunta só o que falta, com "Outro" sempre aberto. As perguntas possíveis são destino, formato, clima, referência e legenda com headline. Mensagem completa (destino, formato e clima ditos) recebe no máximo 1 pergunta; um "edita esse vídeo" sozinho recebe até 5. No Claude Code as perguntas são clicáveis (`AskUserQuestion`). Nos outros runtimes viram uma lista numerada, respondida com "1=2, 2=1". Depois vem o plano curto (template, ritmo de corte, legenda, headline, música da biblioteca pelo clima, efeitos) e "Posso editar?".
 
-Tudo fica na pasta do projeto, em `editai/`: `briefs/`, `profiles/<cliente>.json`, `styles/` e `references/`. Nunca dentro do squad, que recusa a própria pasta. Os perfis de partida por nicho estão em `templates/niches/`: saúde e bem-estar, negócio local, infoproduto e aulas, e-commerce, imobiliário e marca pessoal. Nenhum cliente é padrão; há um perfil de exemplo em `examples/profiles/`.
+Tudo fica na pasta do projeto, em `editai/`: `briefs/`, `profiles/<cliente>.json`, `styles/` e `references/`. Nunca dentro do squad, que recusa a própria pasta. Os perfis de partida por nicho estão em `templates/niches/`: saúde e bem-estar, negócio local, infoproduto e aulas, e-commerce, imobiliário, marca pessoal e, desde a 2.3.0, igreja e ministração (contínuo, proporção original, sem headline, legenda palavra por palavra). Nenhum cliente é padrão; há um perfil de exemplo em `examples/profiles/`.
 
 ### Copiar estilo de referência
 
@@ -281,9 +298,9 @@ Live streaming, avatar em tempo real, escrever os ganchos (isso fica com um squa
 
 ## English
 
-**EditAi** (from the Portuguese "edita aí", roughly "go ahead, edit it", and from "Edit AI") is a retention-editing studio for short-form video, packaged as a Nirvana-OS squad. Give it a clip, a photo or a screen recording and it returns a 9:16 MP4 (1080x1920, H.264, 30 fps) edited with catalogued hooks. With it come the JSON edit spec that produced the video and a measured QA report: platform safe zones, text size and dwell time, -14 LUFS, codec. It also keeps the AI generation pipelines inherited from `nirvana-video-creator`, all ending in the same edit pass. It fits any niche: clinic, restaurant, shop, course, real estate, personal brand.
+**EditAi** (from the Portuguese "edita aí", roughly "go ahead, edit it", and from "Edit AI") is a retention-editing studio for short-form video, packaged as a Nirvana-OS squad. Give it a clip, a photo or a screen recording and it returns a 9:16 MP4 (1080x1920, H.264, 30 fps), or a 16:9 one since 2.3.0, edited with catalogued hooks. With it come the JSON edit spec that produced the video and a measured QA report: platform safe zones, text size and dwell time, -14 LUFS, codec. It also keeps the AI generation pipelines inherited from `nirvana-video-creator`, all ending in the same edit pass. It fits any niche: clinic, restaurant, shop, course, real estate, personal brand.
 
-Version 2.2.0. Squad protocol 6.0. Prefix `editai`. About 25 MB. Version 2.2.0 adds the measured cut with standard cleanup (wave 2 of the editonny fusion) and landscape-to-vertical reframing that follows the face; 2.1.0 added automatic B-roll (wave 1). Version 2.0.0 changed the name, the squad folder, the folder in your project and the cache; projects and downloads from before keep working (see the 2.0.0 entry in the CHANGELOG).
+Version 2.3.0. Squad protocol 6.0. Prefix `editai`. About 25 MB. Version 2.3.0 adds 16:9 output, a no-cuts mode for sermons and church services, captions one word at a time and fonts the person supplies. Version 2.2.0 added the measured cut with standard cleanup (wave 2 of the editonny fusion) and landscape-to-vertical reframing that follows the face; 2.1.0 added automatic B-roll (wave 1). Version 2.0.0 changed the name, the squad folder, the folder in your project and the cache; projects and downloads from before keep working (see the 2.0.0 entry in the CHANGELOG).
 
 ### Install
 
@@ -350,6 +367,12 @@ Every full edit of recorded speech is cleaned without being asked: long pauses, 
 
 `"reframe": {"mode": "follow-face"}` turns a 16:9 talk, lesson or sermon into 9:16: editonny's `track_faces.py` measures the face 10 times a second, and the frame stands still while the person sways near the centre and travels calmly when they really move. Full source height (a hand microphone stays in). `"layout": "band"` lowers the picture under a blurred (or solid) top band that holds the headline away from the head. QA `reframe_face` checks every face sample inside the crop; without editonny it is a centre crop and the QA says so.
 
+### Landscape output and no cuts (sermons, services)
+
+A sermon or church service plays whole and continuous in the aspect it was recorded: no pause, breath or repetition comes out, and there is no punch-in, zoom or reframe. This mode wins over the standard cleanup, and the briefing turns it on by itself when the message says ministração, pregação, culto, sermão, "sem cortes", "contínuo", sermon or "no cuts at all" (niche `church-ministry`). `cli.ts cut <video> --continuous --project <dir> --lang pt --script speech.txt --denoise auto` cuts nothing: it measures each word onset, applies the script spelling and cleans the noise when the diagnosis asks. In a batch item use `"cut": "<cut.json>"` (or `"cut": "none"` with the takes), `"canvas": "same-as-source"` (or `"1920x1080"`) and `"hook_lines": []` for no headline; in a hand-written spec, `"cut": "none"` and `"canvas": "same-as-source"`. The 9:16 templates are unchanged: without `canvas` the output is 1080x1920 as before.
+
+16:9 safe zones: `youtube_16x9` (YouTube player controls at the bottom, title at the top, 5% sides) and `screen_16x9` (church screen, projector or TV: outside the 90% title-safe area); a canvas is measured only against the platforms of its own orientation. Captions sit in the lower third (83% of the height) and never over the face measured by editonny (QA `captions_lower_third`). `captions.preset: "word"` shows one word at a time in white bold with a soft black shadow (a blurred halo and a slightly offset shadow, no thick outline); QA `caption_sync` checks each event on its word and every phrase onset within 0.1 s of the voice on the waveform, and `caption_background` warns when a word sits on a bright background. No-cut proof: `continuous_take` (the source whole, same duration within 0.1 s) and `no_scene_cut` (ffmpeg `scdet` finds no cut the source does not have). A font the person supplies goes in `<project>/fonts/` with `"fonts": {"dir": "fonts"}` in the batch: the family comes from the file, the license is recorded as supplied by the user, and the file is copied only into the render work folder, never into the squad. Until it arrives the declared fallback (Inter Bold) is used, the QA says so (`caption_font`), and the same command run again picks the font up.
+
 ### Music and sound effects
 
 The index lists 23 CC0 tracks in 6 moods and 102 CC0 effects in 28 categories from editonny's library, each item's license read and recorded (`LICENSES.md`, `CREDITS.md`). The starter kit holds the default and the shortest other track of each mood as AAC 96 kbps, plus 15 original effects including the `whoosh`, `hit` and `riser` roles; after `library pull` the engine uses the 320 kbps originals instead of the kit versions. A spec picks music by mood (`"music": { "mood": "calm" }`) and effects by name (`"src": "@sfx:whoosh"`, `anchor: true` lands the impact on `at`). Under a voice the music is ducked by a sidechain compressor and the mix ends at -14 LUFS. The same spec renders the same file, byte for byte.
@@ -375,7 +398,7 @@ The request text is data: the engine never runs anything from it, and `edit-op` 
 
 ### Guided briefing and reference style
 
-The briefing writes everything to your project folder (`editai/briefs`, `editai/profiles/<client>.json`, `editai/styles`), never into the squad. Niche starting profiles live in `templates/niches/`; no client is a default, and there is one example profile in `examples/profiles/`. `cli.ts style-extract <file|link> --name <n> --project <dir>` measures pace, zoom, text and caption placement, headline, sound effects, music level, palette and framing with editonny's `measure_reference.py` (subprocess, nothing copied). `cli.ts style-apply <style.json> <batch.json>` renders a quick draft, the final with QA and checks the mini editor. The `.style.md` report lists what the engine cannot reproduce: exact font, colour grade, B-roll shots, special transitions and text animations, a pace calmer than the material.
+The briefing writes everything to your project folder (`editai/briefs`, `editai/profiles/<client>.json`, `editai/styles`), never into the squad. Niche starting profiles live in `templates/niches/` (since 2.3.0 also church and ministry: no cuts, original aspect, no headline, word-by-word captions); no client is a default, and the example profiles are in `examples/profiles/`. `cli.ts style-extract <file|link> --name <n> --project <dir>` measures pace, zoom, text and caption placement, headline, sound effects, music level, palette and framing with editonny's `measure_reference.py` (subprocess, nothing copied). `cli.ts style-apply <style.json> <batch.json>` renders a quick draft, the final with QA and checks the mini editor. The `.style.md` report lists what the engine cannot reproduce: exact font, colour grade, B-roll shots, special transitions and text animations, a pace calmer than the material.
 
 ### Concat (optional)
 

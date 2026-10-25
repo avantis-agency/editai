@@ -61,6 +61,14 @@ Coluna "Motor" diz como o `lib/edit-engine/ffmpeg.ts` executa o gancho. "Manual"
 - **Motor:** `reframe: {mode: "follow-face", layout: "fill" | "band"}` no spec (`lib/edit-engine/reframe.ts`); o rosto vem do `track_faces.py` do editonny 1.0.0 a 10 Hz, por subprocesso; sem editonny, corte central e o QA avisa. QA: `reframe_face` (toda amostra medida do rosto dentro do corte) e `reframe_motion`.
 - **Fonte:** `helpers/track_faces.py` do editonny 1.0.0 (MIT, Matheus Gomes: mediana de 5, zona morta de 3%, movimento de 0,5 s), lido em 25/10/2026; a câmera virtual mais calma por cima é do EditAi.
 
+### `continuous_take` · Plano contínuo, sem cortes
+- **O que é:** a gravação passa inteira, do primeiro ao último quadro: nenhuma pausa, respiração ou repetição sai, e não há punch-in, zoom, flash nem reframe.
+- **Quando usar:** pregação, ministração, culto, sermão, ou sempre que a pessoa pede "sem cortes" ou "contínuo". Vence a limpeza padrão.
+- **Para que serve:** numa ministração a pausa faz parte da fala, e o corte seco quebra o momento. No pedido de 25/10/2026, a editora cliente achou os cortes secos demais para uma ministração e pediu o vídeo contínuo.
+- **Padrão:** `"cut": "none"` no spec ou no item do `th-batch`, ou `cli.ts cut --continuous` (palavras medidas e denoise opcional, sem cortar nada). O nicho `church-ministry` liga sozinho.
+- **Motor:** `lib/edit-engine/continuous.ts`: `resolveSpec` tira os movimentos de câmera, o zoom alternado, os flashes e o reframe; `validateSpec` recusa take que pula tempo da fonte. QA: `continuous_take` (fonte inteira, duração igual com 0,1 s de folga) e `no_scene_cut` (o `scdet` do ffmpeg não acha no vídeo um corte que a fonte não tem).
+- **Fonte:** pedido de uma editora cliente, 25/10/2026 (sem cortes, vídeo contínuo numa ministração).
+
 ### `pattern_break` · Quebra de padrão
 - **O que é:** mudança brusca de cor, layout, enquadramento ou ritmo: flash branco de 2 a 4 quadros, tela que vira dividida, corte para a tela do app.
 - **Quando usar:** quando o vídeo repete o mesmo tipo de plano por mais de 4 s; na entrada da "holding zone" (3 a 10 s).
@@ -240,6 +248,14 @@ Coluna "Motor" diz como o `lib/edit-engine/ffmpeg.ts` executa o gancho. "Manual"
 - **Padrão:** `captions.preset: "bold-word"`, `font_px` 76, `max_width_px` 820 (o motor mede cada grupo e reduz só o que passa), `emphasis_color` `#ffd84d`, `pop_scale` 114, `max_words` 3, palavras-chave marcadas com `emphasis: true` nas palavras transcritas.
 - **Motor:** `lib/edit-engine/ass.ts` (`boldWordEvents`), ajuste por grupo em `safezones.ts` (`fitCaptions`).
 - **Fonte:** cena de legenda da versão A do A/B interno do autor (Montserrat 900, 70 px, palavra a 114%, amarelo `#ffd84d`) e o veredito do usuário no mesmo dia; fonte Anton (SIL OFL 1.1, `assets/fonts/OFL-Anton.txt`), copiada do editonny 1.0.0.
+
+### `caption_single_word` · Legenda uma palavra por vez
+- **O que é:** uma palavra na tela de cada vez, entrando no início dela e saindo quando a próxima começa (ou até 0,25 s na pausa). A frase nunca se acumula. Branca, em negrito, com sombra preta suave (desfocada e um pouco deslocada), sem contorno grosso e sem cor de destaque.
+- **Quando usar:** ministração e fala reflexiva, quando a pessoa pede "palavra por palavra"; vídeo deitado, no terço de baixo.
+- **Para que serve:** acompanha a fala sem competir com o rosto nem com o cenário, e uma palavra só lê em um olhar.
+- **Padrão:** `captions.preset: "word"`, Inter Bold (ou a fonte que a pessoa mandar, em `fonts/`), `font_px` 60 em, sombra `shadow_px` 3, `shadow_blur` 6, 85% de preto. No 16:9, `y` a 83% da altura.
+- **Motor:** `lib/edit-engine/ass.ts` (`wordEvents`: um evento por palavra e uma camada de sombra desfocada embaixo). QA: `caption_sync` (evento no início da palavra; começo de frase a até 0,1 s da voz medida na forma de onda), `contrast_captions` aceita a sombra suave, `caption_background` mede o fundo atrás de cada palavra.
+- **Fonte:** pedido de uma editora cliente, 25/10/2026 (palavra por palavra, branca com sombra preta leve, em negrito, na fonte dela).
 
 ### `headline_fixed` · Headline fixa
 - **O que é:** o gancho em texto fica na tela o vídeo inteiro, em Anton de cerca de 86 px a 1080x1920, com largura máxima medida.

@@ -1,5 +1,5 @@
 {
-  "_doc": "Unsafe rectangles per platform on a 1080x1920 canvas (scale proportionally for other sizes). Text bounding boxes measured by the bbox filter must not intersect any rectangle of a target platform. None of these numbers is published by the platform except the Google Shorts overlay and Meta's ad guidance; each value names its source. Researched 2026-10-17. Organic profiles take the most conservative value among the organic guides cited; the ads profile is Meta's 14/35/6 percent rule.",
+  "_doc": "Unsafe rectangles per platform on a 1080x1920 canvas (scale proportionally for other sizes). Text bounding boxes measured by the bbox filter must not intersect any rectangle of a target platform. None of these numbers is published by the platform except the Google Shorts overlay and Meta's ad guidance; each value names its source. Researched 2026-10-17. Organic profiles take the most conservative value among the organic guides cited; the ads profile is Meta's 14/35/6 percent rule. 2.3.0: a platform with its own \"base\" and \"orientation\": \"landscape\" is drawn on 1920x1080; the QA measures a canvas only against the platforms of its own orientation.",
   "base": { "width": 1080, "height": 1920 },
   "platforms": {
     "instagram_reels": {
@@ -52,6 +52,37 @@
       ],
       "sources": [
         "Google's vertical safe-zone overlay: safe area 840x960 at (48, 288), per Revid (https://www.revid.ai/youtube-shorts-safe-zone) and Somake AI (https://www.somake.ai/blog/youtube-shorts-aspect-ratio)"
+      ]
+    },
+    "youtube_16x9": {
+      "label": "YouTube horizontal player (16:9)",
+      "orientation": "landscape",
+      "base": { "width": 1920, "height": 1080 },
+      "unsafe": [
+        { "label": "top (title and share bar while paused)", "x": 0, "y": 0, "w": 1920, "h": 86 },
+        { "label": "bottom (progress bar and player controls)", "x": 0, "y": 950, "w": 1920, "h": 130 },
+        { "label": "left 5 percent (title-safe)", "x": 0, "y": 0, "w": 96, "h": 1080 },
+        { "label": "right 5 percent (title-safe)", "x": 1824, "y": 0, "w": 96, "h": 1080 }
+      ],
+      "sources": [
+        "bottom 130 and top 86: our reading of the YouTube 1080p player chrome (progress bar plus control row about 12 percent of the height, title bar about 8 percent); Google publishes no safe zone for the horizontal player",
+        "left and right 96: title-safe 90 percent of the width, SMPTE ST 2046-1 (safe title area) and EBU R 95 (graphics-safe area)",
+        "added in EditAi 2.3.0 without internet access: written from the standards as the author knows them, not re-read online"
+      ]
+    },
+    "screen_16x9": {
+      "label": "Church screen, projector or TV (16:9, title-safe)",
+      "orientation": "landscape",
+      "base": { "width": 1920, "height": 1080 },
+      "unsafe": [
+        { "label": "top 5 percent (outside title-safe)", "x": 0, "y": 0, "w": 1920, "h": 54 },
+        { "label": "bottom 5 percent (outside title-safe)", "x": 0, "y": 1026, "w": 1920, "h": 54 },
+        { "label": "left 5 percent (outside title-safe)", "x": 0, "y": 0, "w": 96, "h": 1080 },
+        { "label": "right 5 percent (outside title-safe)", "x": 1824, "y": 0, "w": 96, "h": 1080 }
+      ],
+      "sources": [
+        "title-safe area, 90 percent of the width and of the height: SMPTE ST 2046-1 (safe title) and EBU R 95 (graphics-safe); projectors and TVs with overscan crop the edges",
+        "added in EditAi 2.3.0 without internet access: written from the standards as the author knows them, not re-read online"
       ]
     }
   }

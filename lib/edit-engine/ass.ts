@@ -1,7 +1,7 @@
 // Builds the .ass subtitle script that libass burns in. All text animation of
 // the engine lives here: pop-in, slide-up, fade, staggered lines, word reveal,
 // highlighted words and word-by-word captions. Bun only.
-import { assSize } from "./fonts.ts";
+import { assSize, familyOf } from "./fonts.ts";
 import type { Captions, EditSpec, TextLayer, TextStyle } from "./spec.ts";
 
 /** #RRGGBB -> &HAABBGGRR (ASS colour order is blue-green-red). */
@@ -27,9 +27,10 @@ function styleLine(name: string, st: TextStyle, mask: boolean): string {
   const back = mask ? "&H00FFFFFF" : (st.box ? assColor(st.box_color ?? "#000000", 0x30) : "&H8C000000");
   const borderStyle = st.box ? 3 : 1;
   const outlinePx = st.box ? Math.max(st.outline_px ?? 18, 8) : (st.outline_px ?? 4);
-  const shadow = mask ? 0 : (st.shadow_px ?? 2);
+  // soft shadow (2.3.0): the blurred shadow is an event layer of its own (softShadow), so the style draws none
+  const shadow = mask || (st.shadow_blur ?? 0) > 0 ? 0 : (st.shadow_px ?? 2);
   return [
-    `Style: ${name}`, st.font_family ?? "Inter", assSize(st.font_px, st), primary, primary, outline, back,
+    `Style: ${name}`, familyOf(st), assSize(st.font_px, st), primary, primary, outline, back,
     st.bold === false ? 0 : -1, 0, 0, 0, 100, 100, 0, 0, borderStyle, outlinePx, shadow, 5, 0, 0, 0, 1,
   ].join(",");
 }
@@ -119,12 +120,13 @@ function textEvents(t: TextLayer, style: string, duration: number): string[] {
  */
 export function captionGroups(c: Captions): Captions["words"][] {
   const groups: Captions["words"][] = [];
+  const maxWords = c.preset === "word" ? 1 : c.max_words; // the word preset shows one word at a time (2.3.0)
   let phrase: Captions["words"] = [];
   c.words.forEach((w, i) => {
     phrase.push(w);
     const next = c.words[i + 1];
     if (next && !/[,.!?;:]$/.test(w.word) && next.start - w.end < 0.3) return;
-    const n = Math.ceil(phrase.length / c.max_words);
+    const n = Math.ceil(phrase.length / maxWords);
     let k = 0;
     for (let g = 0; g < n; g++) {
       const size = Math.ceil((phrase.length - k) / (n - g));
@@ -148,8 +150,17 @@ export const BOLD_WORD_STYLE: TextStyle = {
   outline_px: 6, outline_color: "#14101c", shadow_px: 4, uppercase: true,
 };
 
+/**
+ * Default look of the word preset (2.3.0): one word at a time, white, bold, a soft black shadow (blurred,
+ * slightly offset) and no hard outline. Any field set in captions.style wins.
+ */
+export const WORD_STYLE: TextStyle = {
+  font_family: "Inter", font_px: 72, bold: true, color: "#ffffff", outline_px: 0,
+  shadow_px: 3, shadow_blur: 6, shadow_color: "#000000", shadow_alpha: 0.85, uppercase: false,
+};
+
 export function captionStyle(c: Captions): TextStyle {
-  return c.preset === "bold-word" ? { ...BOLD_WORD_STYLE, ...c.style } : c.style;
+  return c.preset === "bold-word" ? { ...BOLD_WORD_STYLE, ...c.style } : c.preset === "word" ? { ...WORD_STYLE, ...c.style } : c.style;
 }
 
 /** The B-roll window that moves a caption group (2.1.0, written by resolveSpec): its y, or null = as written. */
@@ -176,7 +187,7 @@ export function captionSpans(c: Captions): [number, number][][] {
   const gs = captionGroups(c);
   return gs.map((g, gi) => {
     const nextStart = gi + 1 < gs.length ? gs[gi + 1][0].start : Infinity;
-    const end = c.preset === "bold-word" ? Math.min(g[g.length - 1].end + HOLD_S, nextStart) : g[g.length - 1].end;
+    const end = c.preset === "bold-word" || c.preset === "word" ? Math.min(g[g.length - 1].end + HOLD_S, nextStart) : g[g.length - 1].end;
     const out: [number, number][] = [];
     for (let j = 0; j < g.length; j++) {
       const v = visibleSpan(c, g[j].start, j + 1 < g.length ? g[j + 1].start : end);
@@ -228,9 +239,56 @@ function boldWordEvents(c: Captions, x: number): string[] {
   return out;
 }
 
+/** On-screen span of each word of the word preset: from its start to the next word, at most HOLD_S into a pause. */
+export function wordSpans(c: Captions): [number, number][] {
+  return c.words.map((w, i) => {
+    const next = c.words[i + 1];
+    const end = next ? Math.min(next.start, w.end + HOLD_S) : w.end + HOLD_S;
+    return [w.start, Math.max(end, w.start + 0.034)];
+  });
+}
+
+/** The word as the word preset shows it: trailing , . ; : … dropped (? and ! stay). */
+export const wordText = (w: string, st: TextStyle) => (st.uppercase ? w.toUpperCase() : w).replace(/[,.;:…]+$/u, "");
+
+/**
+ * Soft shadow of a text event (2.3.0), two layers under the crisp text, both in shadow_color at shadow_alpha:
+ * a halo (the glyphs widened by half the blur, blurred, not offset: it separates white text from a white
+ * shirt) and a drop shadow (the glyphs blurred by shadow_blur, offset by shadow_px). No hard outline.
+ * Empty for the measuring mask.
+ */
+function softShadow(st: TextStyle, x: number, y: number, text: string, mask: boolean): string[] {
+  if (mask || !(st.shadow_blur && st.shadow_blur > 0)) return [];
+  const d = st.shadow_px ?? 3, b = st.shadow_blur, c = assColor(st.shadow_color ?? "#000000");
+  const a = `&H${Math.round(255 * (1 - Math.min(1, Math.max(0, st.shadow_alpha ?? 0.85)))).toString(16).padStart(2, "0").toUpperCase()}&`;
+  return [
+    `{\\an5\\pos(${Math.round(x)},${Math.round(y)})\\bord${Math.max(1, Math.round(b / 2))}\\shad0\\1c${c}\\3c${c}\\1a${a}\\3a${a}\\blur${b}}${text}`,
+    `{\\an5\\pos(${Math.round(x + d * 0.6)},${Math.round(y + d)})\\bord0\\shad0\\1c${c}\\1a${a}\\blur${b}}${text}`,
+  ];
+}
+
+/** word preset (2.3.0): one event per word, in sync with the speech; the phrase never accumulates. */
+function wordEvents(c: Captions, x: number, mask: boolean): string[] {
+  const st = captionStyle(c);
+  const out: string[] = [];
+  const spans = wordSpans(c);
+  c.words.forEach((w, i) => {
+    const win = groupWindow(c, [w]);
+    const clip = c.windows?.length ? visibleSpan(c, spans[i][0], spans[i][1]) : spans[i];
+    if (!clip) return;
+    const text = esc(wordText(w.word, st));
+    if (!text) return;
+    const y = Math.round(win?.y ?? c.y);
+    for (const sh of softShadow(st, x, y, text, mask)) out.push(`Dialogue: 0,${ts(clip[0])},${ts(clip[1])},Captions,,0,0,0,,${sh}`);
+    out.push(`Dialogue: 1,${ts(clip[0])},${ts(clip[1])},Captions,,0,0,0,,{\\an5\\pos(${Math.round(x)},${y})}${text}`);
+  });
+  return out;
+}
+
 /** Word-by-word captions: short groups, active word highlighted, emphasis words in emphasis_color. */
-function captionEvents(c: Captions, x: number): string[] {
+function captionEvents(c: Captions, x: number, mask = false): string[] {
   if (c.preset === "bold-word") return boldWordEvents(c, x);
+  if (c.preset === "word") return wordEvents(c, x, mask);
   const out: string[] = [];
   const st = c.style;
   const base = assColor(st.color ?? "#ffffff");
@@ -264,7 +322,7 @@ export function buildAss(spec: EditSpec, opts: { mask?: boolean; only?: string }
   const withCaptions = spec.captions && (!opts.only || opts.only === "captions");
   if (withCaptions) styles.push(styleLine("Captions", captionStyle(spec.captions!), mask));
   const events = texts.flatMap((t) => textEvents(t, `T_${t.id}`, spec.duration));
-  if (withCaptions) events.push(...captionEvents(spec.captions!, W / 2));
+  if (withCaptions) events.push(...captionEvents(spec.captions!, W / 2, mask));
   return [
     "[Script Info]", "ScriptType: v4.00+", `PlayResX: ${W}`, `PlayResY: ${H}`, "ScaledBorderAndShadow: yes", "WrapStyle: 2", "",
     "[V4+ Styles]",

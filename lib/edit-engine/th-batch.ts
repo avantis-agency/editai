@@ -23,7 +23,13 @@
 //     "broll_marks": [5.7, 21.0],                                        optional: "põe um card aqui" points (editonny suggest_visuals marks)
 //     "cut": "editai/cut/<name>/cut.json",                                optional (2.2.0): takes, words and kept pauses from cli.ts cut
 //     "reframe": { "mode": "follow-face", "layout": "band" }              optional (2.2.0): a 16:9 source reframed into 9:16 following the face
+//     "cut": "none",                                                      optional (2.3.0): continuous, the takes whole (in defaults to 0, duration to the
+//                                                                          whole source); or a cut.json from cli.ts cut --continuous
+//     "canvas": "same-as-source" | "1920x1080" | "1080x1920",             optional (2.3.0): output size (default the template's 1080x1920)
+//     "hook_lines": [],                                                   empty (2.3.0): no headline
 //   }],
+//   "canvas": "same-as-source",               optional (2.3.0): the same for every item (an item's own canvas wins)
+//   "fonts": { "dir": "fonts" },              optional (2.3.0): the person's .ttf/.otf, outside the squad (license recorded as "fornecida pelo usuário")
 //   "reframe": { "mode": "follow-face" },     optional: the same for every item (an item's own reframe wins)
 //   "template": "talking-head-broll",        optional: the same for every item (default talking-head-captions)
 //   "broll_project": "..",                    optional: project folder with editai/broll/ media and the card cache (default: the batch folder)
@@ -44,15 +50,21 @@ import { suggestBroll } from "./broll.ts";
 import { loadCut } from "./cut.ts";
 import { exportSubtitles } from "./subtitles.ts";
 import type { ReframeSpec } from "./reframe.ts";
+import type { Canvas, CanvasName, UserFonts } from "./spec.ts";
+import { draftSize, isLandscape, landscapeCaptionY, resolveCanvas } from "./canvas.ts";
+import { resolveContinuous } from "./continuous.ts";
+import { probe } from "./measure.ts";
+import { platformOrientation } from "./safezones.ts";
 
 type Word = { word: string; start: number; end: number; emphasis?: boolean };
-export interface Take { src: string; in: number; duration: number; framing?: string; audio_src?: string }
+export interface Take { src: string; in: number; duration: number; framing?: string; audio_src?: string }  // cut "none": in and duration may be left out (the whole source)
 export interface ThItem {
   id: string; hook_lines: string[]; takes: Take[]; words?: Word[]; words_files?: Record<string, string>;
   script?: string; emphasis?: string[]; cut_whoosh?: boolean; cut_whoosh_gain_db?: number; style?: string; slots?: Record<string, unknown>;
-  template?: string; broll_marks?: number[]; cut?: string; reframe?: ReframeSpec;
+  template?: string; broll_marks?: number[]; cut?: string; reframe?: ReframeSpec; canvas?: CanvasName | Canvas; fonts?: UserFonts;
 }
-export interface ThBatch { out_dir: string; concurrency?: number; defaults?: Record<string, unknown>; style?: string; template?: string; broll_project?: string; reframe?: ReframeSpec; items: ThItem[] }
+export interface ThBatch { out_dir: string; concurrency?: number; defaults?: Record<string, unknown>; style?: string; template?: string; broll_project?: string; reframe?: ReframeSpec;
+  canvas?: CanvasName | Canvas; fonts?: UserFonts; items: ThItem[] }
 export interface ThResult {
   id: string; ok: boolean; error?: string; mp4?: string; spec?: string; qa?: QaReport; render_s?: number;
   words_from?: string; script_check?: string; preview?: string; preview_command?: string; style?: string; style_log?: string[]; draft?: string;
@@ -117,11 +129,14 @@ export function buildItemSpec(item: ThItem, defaults: Record<string, unknown>, b
   const template = loadTemplate(item.template ?? "talking-head-captions");
   if (!item.id || !/^[a-z0-9][a-z0-9._-]*$/i.test(item.id)) throw new Error(`item id must be a filename-safe slug: ${item.id}`);
   // a measured cut (2.2.0): its takes, its words (source seconds) and the pauses it kept on purpose
-  const cut = item.cut ? loadCut(expandPath(item.cut, base)) : undefined;
+  const cut = item.cut && item.cut !== "none" ? loadCut(expandPath(item.cut, base)) : undefined;
   if (cut) item = { ...item, takes: item.takes?.length ? item.takes : cut.takes.map((t) => ({ src: t.src, in: t.in, duration: t.duration, framing: t.framing, audio_src: t.audio_src })), words_files: item.words_files ?? cut.words_files };
+  // continuous (2.3.0): "cut": "none", a cut.json of cli.ts cut --continuous, or a style that asks for no cuts
+  const continuous = item.cut === "none" || cut?.mode === "none" || style?.apply.cut.mode === "none";
   if (!item.takes?.length) throw new Error(`${item.id}: takes is empty`);
   const takes = item.takes.map((t) => ({ ...t, src: expandPath(t.src, base) }));
   for (const t of takes) if (!existsSync(t.src)) throw new Error(`${item.id}: clip not found: ${t.src}`);
+  if (continuous) for (const t of takes) { t.in ??= 0; t.duration ??= r3(probe(t.src).duration); }
   const duration = takes.reduce((s, t) => s + t.duration, 0); // not rounded: the last take must end exactly on it
   const { words, from } = wordsFor(item, takes, base, outDir);
   const script_check = applyScript(words, item.script);
@@ -130,8 +145,14 @@ export function buildItemSpec(item: ThItem, defaults: Record<string, unknown>, b
     ...defaults, ...(style ? styleSlots(style) : {}), ...(item.slots ?? {}),
     id: item.id, video: takes[0].src, video_in: takes[0].in, words, hook_lines: item.hook_lines, duration,
   }, base);
-  slots.alignment_text ??= `headline "${item.hook_lines.join(" / ")}"; captions are the speaker's own words`;
+  const headline = !!item.hook_lines?.length;
+  slots.alignment_text ??= headline ? `headline "${item.hook_lines.join(" / ")}"; captions are the speaker's own words` : "no headline; captions are the speaker's own words";
   const spec = fillTemplate(template, slots);
+  if (!headline) {
+    // "hook_lines": [] (2.3.0): no headline, and none of its hooks
+    spec.texts = spec.texts.filter((t) => t.role !== "hook");
+    spec.hooks_applied = spec.hooks_applied.filter((h) => !["text_pop_in", "headline_fixed", "word_highlight"].includes(h.hook));
+  }
   const framing = (t: Take) => t.framing ?? "talking-head";
   let at = 0;
   spec.layers = takes.map((t, i): MediaLayer => {
@@ -149,13 +170,28 @@ export function buildItemSpec(item: ThItem, defaults: Record<string, unknown>, b
       { hook: "hard_cut", at: cuts[0], why: `${takes.length} takes, silences and dead frames out` },
       { hook: "smooth_take_cut", at: cuts[0], why: "every cut: audio leads 2 frames, 60 ms audio crossfade, scale alternates 100/107% on the cut frame; no image dissolve" });
   }
-  if (cut) {
+  if (cut && !continuous) {
     spec.cut = { file: expandPath(item.cut!, base), pace: cut.pace, holds: cut.holds, end_hold_s: cut.end_hold_s, verify: { inside_words: cut.verify.inside_words, clicks: cut.verify.clicks, speech_equal: cut.audit.speech_equal } };
     spec.notes = [...(spec.notes ?? []), `measured cut ${cut.name}: ${cut.duration.raw.toFixed(1)} s raw -> ${cut.duration.final.toFixed(1)} s, pace ${cut.pace}, ${cut.removed.length} block(s) out (CORTE.md)`];
   }
   if (item.reframe) { spec.reframe = structuredClone(item.reframe); if (spec.reframe.project) spec.reframe.project = expandPath(spec.reframe.project, base); }
+  if (item.fonts) spec.fonts = { ...item.fonts, dir: item.fonts.dir ? expandPath(item.fonts.dir, base) : undefined, files: item.fonts.files?.map((x) => expandPath(x, base)) };
   const style_log = style ? applyStyleToSpec(spec, style) : [];
-  const cutWhoosh = style ? style.apply.sfx.cut_whoosh : item.cut_whoosh;
+  // canvas (2.3.0): by name or same-as-source; a horizontal canvas moves the text to its own layout
+  const canvasReq = item.canvas ?? style?.apply.canvas;
+  if (canvasReq) {
+    spec.canvas = canvasReq as Canvas;
+    resolveCanvas(spec);
+    if (typeof spec.canvas !== "object") throw new Error(`${item.id}: canvas ${JSON.stringify(canvasReq)} unknown`);
+    if (isLandscape(spec.canvas)) style_log.push(...toLandscape(spec, item.slots ?? {}));
+  }
+  if (continuous) {
+    spec.cut = { mode: "none", ...(cut ? { file: expandPath(item.cut!, base) } : {}), holds: [] };
+    delete spec.transitions; // one picture from start to end: no J-cut, no alternating zoom
+    resolveContinuous(spec);
+    style_log.push("continuous (cut none): the takes play whole, no punch-in, zoom, flash or reframe");
+  }
+  const cutWhoosh = continuous ? false : style ? style.apply.sfx.cut_whoosh : item.cut_whoosh;
   const whooshDb = item.cut_whoosh_gain_db ?? (style ? style.apply.sfx.gain_db : -30);
   if (takes.length > 1) {
     if (cutWhoosh) {
@@ -172,6 +208,27 @@ export function buildItemSpec(item: ThItem, defaults: Record<string, unknown>, b
     spec.hooks_applied.push({ hook: "music_duck", at: m.start ?? 0, why: `${m.mood ? `library mood ${m.mood}` : basename(String(m.path))}, ${m.below_voice_db ?? 22} LU under the voice, ducked up to ${m.duck_db ?? 8} dB under speech` });
   }
   return { spec, words_from: from, script_check, style_log };
+}
+
+/**
+ * A 9:16 template on a horizontal canvas (2.3.0): positions scale from 1080x1920, the captions go to the lower
+ * third (unless the item gave caption_y), and 9:16 platforms become the 16:9 ones. Returns the log lines.
+ */
+function toLandscape(spec: EditSpec, slots: Record<string, unknown>): string[] {
+  const { width: W, height: H } = spec.canvas, sx = W / 1080, sy = H / 1920, log: string[] = [];
+  for (const t of spec.texts) { t.x = Math.round(t.x * sx); t.y = Math.round(t.y * sy); if (t.max_width_px) t.max_width_px = Math.round(Math.min(t.max_width_px * sx, W * 0.6)); }
+  if (spec.captions) {
+    spec.captions.y = typeof slots.caption_y === "number" ? slots.caption_y : landscapeCaptionY(H);
+    if (spec.captions.max_width_px) spec.captions.max_width_px = Math.round(Math.min(spec.captions.max_width_px * sx, W * 0.6));
+  }
+  const kept = spec.platforms.filter((p) => platformOrientation(p) === "landscape");
+  if (kept.length !== spec.platforms.length) {
+    log.push(`platforms ${spec.platforms.join(", ")} -> ${kept.length ? kept.join(", ") : "youtube_16x9, screen_16x9"} (16:9 canvas)`);
+    spec.platforms = kept.length ? kept : ["youtube_16x9", "screen_16x9"];
+  }
+  if (spec.protect_regions?.length && slots.protect_regions === undefined) { spec.protect_regions = []; log.push("protect_regions of the 9:16 layout dropped: the face is measured on the 16:9 picture"); }
+  log.push(`canvas ${W}x${H}${spec.canvas_request ? ` (${spec.canvas_request})` : ""}: captions at y ${spec.captions?.y ?? "-"}, lower third`);
+  return log;
 }
 
 async function checkPreview(specPath: string): Promise<string> {
@@ -200,7 +257,7 @@ export async function runThBatch(batchPath: string, opts: { previewCheck?: boole
       try {
         const stylePath = opts.style ? resolve(opts.style) : (item.style ?? batch.style);
         const style = stylePath ? loadStyle(expandPath(stylePath, base)) : undefined;
-        const { spec, words_from, script_check, style_log } = buildItemSpec({ template: batch.template, reframe: batch.reframe, ...item }, batch.defaults ?? {}, base, outDir, style);
+        const { spec, words_from, script_check, style_log } = buildItemSpec({ template: batch.template, reframe: batch.reframe, canvas: batch.canvas, fonts: batch.fonts, ...item }, batch.defaults ?? {}, base, outDir, style);
         if (spec.broll && spec.broll.mode === "auto" && !spec.broll.items?.length) {
           // automatic B-roll (2.1.0): the client media of the project and the editonny cards, before the render
           if (item.broll_marks?.length) spec.broll.marks = item.broll_marks.map((at) => ({ at }));
@@ -213,8 +270,8 @@ export async function runThBatch(batchPath: string, opts: { previewCheck?: boole
         if (style) { res.style = style.name; res.style_log = style_log; }
         writeFileSync(join(outDir, `${spec.id}.plan.spec.json`), JSON.stringify(spec, null, 2));
         if (opts.draft) {
-          // quick look first: 540x960, veryfast, the same draft the mini editor makes
-          const d = await render(structuredClone(spec), join(outDir, `${spec.id}-draft.mp4`), { draft: { width: 540, height: 960, preset: "veryfast", crf: 26 } });
+          // quick look first: half size (540x960 for 9:16), veryfast, the same draft the mini editor makes
+          const d = await render(structuredClone(spec), join(outDir, `${spec.id}-draft.mp4`), { draft: { ...draftSize(spec.canvas), preset: "veryfast", crf: 26 } });
           res.draft = d.out;
           console.log(`[th-batch] ${spec.id}: quick draft ${d.seconds.toFixed(1)}s -> ${d.out}`);
         }

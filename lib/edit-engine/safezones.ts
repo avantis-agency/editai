@@ -10,11 +10,24 @@ export const ALL_PLATFORMS = Object.keys(DATA.platforms) as Platform[];
 
 export interface Zone extends Rect { label: string; platform: Platform }
 
+/** "portrait" (9:16, the base of the file) or "landscape" (2.3.0, 16:9 platforms with their own base); null when unknown. */
+export function platformOrientation(platform: string): "portrait" | "landscape" | null {
+  const p = DATA.platforms[platform];
+  return p ? (p.orientation ?? "portrait") : null;
+}
+
+/** The platforms a canvas is measured against: the ones of its own orientation (a 9:16 canvas sees the same four as before). */
+export function platformsFor(W: number, H: number): Platform[] {
+  const want = W > H ? "landscape" : "portrait";
+  return ALL_PLATFORMS.filter((p) => platformOrientation(p) === want);
+}
+
 /** Unsafe rectangles of a platform, scaled to the canvas. */
 export function unsafeRects(platform: Platform, W: number, H: number): Zone[] {
   const p = DATA.platforms[platform];
   if (!p) throw new Error(`unknown platform ${platform}; known: ${ALL_PLATFORMS.join(", ")}`);
-  const sx = W / DATA.base.width, sy = H / DATA.base.height;
+  const base = p.base ?? DATA.base;
+  const sx = W / base.width, sy = H / base.height;
   return p.unsafe.map((r: any) => ({
     label: r.label, platform, x: Math.round(r.x * sx), y: Math.round(r.y * sy), w: Math.round(r.w * sx), h: Math.round(r.h * sy),
   }));

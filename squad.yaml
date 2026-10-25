@@ -1,9 +1,9 @@
 name: editai
-version: 2.2.0
+version: 2.3.0
 protocol: "6.0"
 description: >
   EditAi (a play on "edita aí" and "Edit AI").
-  Renders retention-edited short-form MP4s (9:16, 1080x1920, H.264, 30 fps) from
+  Renders retention-edited MP4s (9:16 1080x1920, or 16:9 at 1920x1080 or the source size; H.264, 30 fps) from
   footage, photos or screen recordings: picks a format template (text-only hook,
   POV with app screen, this-vs-that split screen, talking head with word captions),
   applies cataloged edit hooks (impact zoom, slow push, punch-in cut, hard cut,
@@ -15,7 +15,10 @@ description: >
   the captions), cleans raw recorded speech by default with a measured cut (pauses,
   breaths, false starts and repeated takes out on waveform edges, emphasis kept, a
   "fit in N seconds" request, verified for words cut at the joins and retranscribed,
-  optional denoise), reframes a 16:9 recording into 9:16 following the face, exports
+  optional denoise), plays a sermon, church service or any "no cuts" request whole and continuous
+  (no pause removed, no punch-in, zoom or reframe, proved by a scene-cut check), burns captions one
+  word at a time in white with a soft black shadow in a font the person supplies (kept in the project,
+  never in the squad, with a declared fallback), reframes a 16:9 recording into 9:16 following the face, exports
   SRT and VTT, writes a JSON edit spec, renders it with ffmpeg and libass, and
   measures the result: platform safe zones on the real text bounding box, text
   size and dwell time, loudness at -14 LUFS, codec and frame rate. Ships a CC0
@@ -132,25 +135,24 @@ output:
 capabilities:
   - id: video.retention_edit.execute
     description: >
-      EditAi edits existing clips, photos or screen recordings into a retention-paced
-      9:16 MP4: chooses the format template (text-only hook, POV with app screen,
-      this-vs-that split screen, talking head with bold word-by-word captions and
-      a fixed headline), places cataloged edit hooks on a timeline (impact zoom,
-      slow push, punch-in cut, hard cut, smooth take cut with J-cut, audio
-      crossfade and alternating punch-in, pattern break, animated text entrance,
-      speed ramp, B-roll overlay, whoosh, hit, riser, silence before the turn,
-      music drop, background music ducked under the voice), adds automatic
-      B-roll to a talking head (client media matched to spoken words, animated
-      cards for prices, counts, lists, steps and offers from the installed
-      editonny 1.0.0, never over eyes, mouth, headline or captions), cleans raw
-      recorded speech by default (measured cut: pauses, breaths, false starts and
-      repeated takes out without cutting a word, emphasis kept, fit in N seconds,
-      verify_cut and audit_cut proof, optional denoise), reframes a 16:9 recording into
-      9:16 following the face, exports SRT and VTT, writes the JSON
-      edit spec, renders it with ffmpeg and libass, and runs a measured QA:
-      text bounding box against Reels, TikTok, Shorts and Facebook Reels safe
-      zones, font size floor, dwell time, eyes and mouth kept clear, -14 LUFS and
-      -1 dBTP, H.264 1080x1920 at 30 fps.
+      EditAi edits existing clips, photos or screen recordings into a retention-paced 9:16
+      MP4 (or 16:9: 1920x1080 or the source size): chooses the format template (text-only
+      hook, POV with app screen, this-vs-that split screen, talking head with bold
+      word-by-word captions and a fixed headline), places cataloged edit hooks on a
+      timeline (impact zoom, slow push, punch-in cut, hard cut, smooth take cut with
+      J-cut, audio crossfade and alternating punch-in, pattern break, animated text
+      entrance, speed ramp, B-roll overlay, whoosh, hit, riser, silence before the turn,
+      music drop, background music ducked under the voice), adds automatic B-roll to a
+      talking head (client media matched to spoken words, animated cards for prices,
+      counts, lists, steps and offers from the installed editonny 1.0.0, never over eyes,
+      mouth, headline or captions), cleans raw recorded speech by default (measured cut:
+      pauses, breaths, false starts and repeated takes out without cutting a word,
+      emphasis kept, fit in N seconds, verify_cut and audit_cut proof, optional denoise),
+      plays a sermon or church service whole with no cuts, reframes a 16:9 recording into
+      9:16 following the face, captions one word at a time in a font the person supplies,
+      exports SRT and VTT, writes the JSON edit spec, renders it with ffmpeg and libass,
+      and runs a measured QA: text bounding box against the platform safe zones, font size
+      floor, dwell time, eyes and mouth kept clear, -14 LUFS and -1 dBTP, H.264 at 30 fps.
     domains: [video, media, social_media, content]
     inputs:
       - name: material
@@ -164,7 +166,7 @@ capabilities:
       - name: platforms
         type: array
         required: false
-        description: instagram_reels, tiktok, youtube_shorts, facebook_reels (default the first two)
+        description: instagram_reels, tiktok, youtube_shorts, facebook_reels (default the first two); youtube_16x9 and screen_16x9 for a 16:9 canvas
       - name: review
         type: boolean
         required: false
@@ -173,7 +175,7 @@ capabilities:
       - name: edited_mp4
         type: file
         format: mp4
-        description: 9:16 1080x1920 H.264 30 fps MP4 plus a PNG frame
+        description: H.264 30 fps MP4 (9:16 1080x1920 by default, 16:9 on request) plus a PNG frame and, with captions, SRT and VTT
       - name: edit_spec
         type: file
         format: json
@@ -267,6 +269,7 @@ capabilities:
       - tira as pausas, os erros e as repetições desse vídeo que eu gravei sem cortar palavra e põe legenda
       - edita essa pregação gravada deitada em vídeo vertical para Reels seguindo o rosto, com legenda e headline fixa
       - Clean up my raw talking head recording, cut the pauses and false starts, and fit it in 45 seconds with captions
+      - edita essa ministração do culto sem cortes, na mesma proporção 16:9 do vídeo, com legenda branca palavra por palavra e sem headline
     not_for:
       - gerar vídeo com IA
       - generate ai video
@@ -301,6 +304,12 @@ capabilities:
         blocking: true
       - id: editai_edit_reframe_face
         description: with reframe mode follow-face and the face measured, the QA check reframe_face passes (every measured face sample of every take inside the crop window); without editonny the QA reports the face as not measured
+        blocking: true
+      - id: editai_edit_continuous
+        description: with cut none (no cuts), the QA checks continuous_take (every source whole, duration equal to the sources within 0.1 s) and no_scene_cut (ffmpeg scdet finds no cut the source does not have) pass, and with word captions caption_sync passes (events on the word starts, phrase onsets within 0.1 s of the voice)
+        blocking: true
+      - id: editai_edit_landscape
+        description: on a 16:9 canvas the text clears the youtube_16x9 and screen_16x9 unsafe rectangles of the target platforms, every caption group sits in the lower third (captions_lower_third) and no text covers the measured face; the 9:16 templates and regressions render the same bytes as before
         blocking: true
     fidelity:
       status: experimental
@@ -553,7 +562,8 @@ capabilities:
     description: >
       Guided start of an EditAi short-form video edit for any niche (clinic, restaurant,
       course or class, e-commerce product, real estate, personal brand, wellness
-      UGC): greets a first-time person with a short welcome (what the squad
+      UGC, church service or sermon, where the plan keeps the video whole with no cuts):
+      greets a first-time person with a short welcome (what the squad
       does, reference videos, the mini editor) when the project has no history,
       reads the video, text or audio transcript the person sent, asks only
       the missing multiple-choice questions (destination, format, mood, reference,

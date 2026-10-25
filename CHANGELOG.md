@@ -1,5 +1,39 @@
 # Changelog
 
+## 2.3.0 (2026-10-25)
+
+Vídeo deitado (16:9), modo sem cortes, legenda uma palavra por vez e fonte do usuário. Pedido do usuário, repassando o retorno de uma editora cliente sobre o vídeo de uma ministração: manter a proporção horizontal do original, sem cortes, legenda palavra por palavra branca com sombra preta leve em negrito numa fonte dela, sem a headline e sem a faixa (trace `editai-igreja-v2-20261025-115129`). É a parte mínima da onda 5 da auditoria que esse caso pede (`PLANO-ONDAS.md`). Testado só no Windows 10, com o editonny 1.0.0 instalado. A gravação e a fonte da cliente não entraram no squad.
+
+### novo
+
+- **Canvas por nome** (`lib/edit-engine/canvas.ts`): `"canvas": "1920x1080"`, `"1080x1920"` ou `"same-as-source"` (o tamanho e o fps do primeiro take de tela cheia) no spec, no item do `th-batch` ou no estilo. Sem `canvas`, tudo continua 1080x1920: os templates não mudaram.
+- **Áreas seguras do 16:9** (`safe-zones.json`): `youtube_16x9` (controles e barra de progresso do player embaixo, título em cima, 5% nas laterais) e `screen_16x9` (telão, projetor ou TV: fora dos 90% da área segura de título). Cada plataforma pode ter a própria base; o QA mede um canvas só contra as plataformas da orientação dele, então o 9:16 vê as mesmas quatro de antes. O spec recusa plataforma 9:16 num canvas 16:9 e vice-versa.
+- **QA do 16:9:** `captions_lower_third` (bloqueia: toda caixa de legenda medida no terço de baixo) e o rosto medido pelo `track_faces.py` do editonny vira a área protegida quando o spec não declara nenhuma (`materializeFaces`, cache ao lado do render). O piso de tamanho de fonte usa o lado menor do canvas (no 9:16 é a mesma conta de antes).
+- **Modo sem cortes** (`lib/edit-engine/continuous.ts`): `"cut": "none"` no spec ou no item, `cli.ts cut <vídeo> --continuous` (diagnóstico, palavras com início medido, grafia do roteiro, `--fix` e denoise opcional, sem cortar nada; `cut.json` com `mode: "none"`) ou o estilo com `apply.cut.mode: "none"`. Vence a limpeza padrão e o template: `resolveSpec` tira movimento de câmera, zoom alternado, flash e reframe, com uma nota. QA `continuous_take` (fonte inteira, duração igual com 0,1 s de folga) e `no_scene_cut` (o `scdet` do ffmpeg no vídeo e na fonte: nenhum corte a mais). `breaths_remaining` vira informação: as pausas são do original.
+- **Legenda uma palavra por vez** (`captions.preset: "word"`, `ass.ts wordEvents`): uma palavra por evento, do início dela até a próxima (no máximo 0,25 s na pausa), sem acumular a frase; branca, em negrito, sombra preta suave em duas camadas desfocadas (halo sem deslocamento e sombra levemente deslocada), sem contorno grosso. QA `caption_sync` (bloqueia: evento no início da palavra; começo de frase a até 0,1 s da voz medida no envelope de 10 ms), `contrast_captions` aceita a sombra suave, `caption_background` (aviso) mede o fundo da fonte atrás de cada palavra.
+- **Fonte do usuário** (`spec.fonts`, `fonts.ts`): uma pasta (`<projeto>/fonts`) ou arquivos `.ttf`/`.otf`, sempre fora do squad (o spec recusa uma pasta dentro dele). A família vem da tabela de nomes do arquivo, a licença fica como "fornecida pelo usuário", e o render copia o arquivo só para a pasta de trabalho dele. `font_fallback` declara a substituta enquanto o arquivo não chega; `font_used` diz qual foi usada, e o QA (`caption_font`, `fonts_user`) mostra. A pasta é lida a cada render, então o mesmo comando, de novo, pega a fonte que chegou.
+- **`th-batch`:** `"canvas"`, `"cut": "none"` (takes sem `in` e `duration` = a fonte inteira), `"hook_lines": []` (sem headline) e `"fonts"`. Num canvas 16:9 as posições do template são levadas para o quadro deitado, a legenda vai para 83% da altura e as plataformas viram as do 16:9.
+- **Briefing:** ministração, pregação, culto, sermão, "sem cortes" e "contínuo" ligam o modo sem cortes (linha **Limpeza** "nenhuma"); "mesma proporção" e "16:9" viram a linha **Proporção**; "palavra por palavra" e "Fonte: X" vão para a legenda; "remove a headline" tira a headline. "YouTube longo" deixou de ser só 9:16. Nicho novo `church-ministry` (contínuo, proporção original, sem headline, palavra por palavra, sem música, sem whoosh, sem B-roll) e o exemplo `examples/profiles/ministracao.example.json` (só gosto de estilo).
+- **Mini editor:** desenha o preset `word` e a sombra suave, carrega a fonte do usuário (`/fonts/user/<arquivo>`, só a que o spec achou) e faz a prévia rápida com metade do canvas (960x540 no 16:9; 540x960 no 9:16, como antes).
+- Catálogo: `continuous_take` e `caption_single_word`.
+
+### decisões
+
+- **Halo na sombra.** Só a sombra deslocada deixava a palavra branca fraca sobre uma camisa branca, que é o que fica atrás da legenda num púlpito. O halo desfocado sem deslocamento separa a letra do fundo e continua sendo sombra, sem contorno duro.
+- **`caption_sync` mede só começo de frase.** Dentro da fala corrida o envelope não separa uma palavra da outra; o início dessas palavras vem do Whisper corrigido pelo `align_words.py`. O check diz quantos inícios mediu.
+- **Áreas seguras do 16:9 sem consulta online.** Esta versão foi feita sem internet. Os números saem da área segura de título de 90% (SMPTE ST 2046-1, EBU R 95) e da nossa leitura do player do YouTube, e a fonte de cada número está no `safe-zones.json`.
+- **Duração máxima de 180 s mantida.** Um culto inteiro passa disso; não mexi porque o pedido era de 54 s.
+
+### alterado
+
+- `spec.ts`, `ass.ts`, `fonts.ts`, `measure.ts`, `ffmpeg.ts`, `qa.ts`, `safezones.ts`, `safe-zones.json`, `cut.ts`, `cli.ts`, `th-batch.ts`, `style.ts`, `briefing.ts`, `editor.ts`, `preview-server.ts`, `preview/editor/model.mjs` e `overlay.mjs`; novos `canvas.ts` e `continuous.ts`.
+- `squad.yaml` 2.3.0: descrição do squad e das capabilities execute e guided, 1 `example_brief` (58 → 59), critérios `editai_edit_continuous` e `editai_edit_landscape`. Agentes `retention-editor` e `edit-briefing-guide`, task `plan-retention-edit` e workflow `retention-edit` com a exceção do modo sem cortes. README PT e EN.
+
+### não mudou
+
+- Sem `canvas` por nome, `cut: "none"`, `fonts` e preset `word`, o filtergraph e o `.ass` são os mesmos de antes. Regressões idênticas byte a byte: v2 `3a95058d…`, fumaça `b21e3618…` e `27f556fd…`, `mode off` `3a95058d…`.
+- Corte medido, B-roll, reframe, estilo de referência, biblioteca, Concat e os pipelines de geração. O editonny e os outros squads não foram tocados.
+
 ## 2.2.0 (2026-10-25)
 
 Corte medido e limpeza padrão, onda 2 da fusão com o editonny, e uma fatia da onda 5: gravação deitada que vira vertical seguindo o rosto. Pedido do usuário: "pode trabalhar na fusão então", com um vídeo real de 54 s como prova (trace `editai-onda2-corte-20261025-065311`; plano em `editai-fusao-auditoria-20261024-172940`, `PLANO-ONDAS.md` ondas 2 e 5). Testado só no Windows 10, com o editonny 1.0.0 instalado. A gravação de prova é pessoal e não entrou no squad.

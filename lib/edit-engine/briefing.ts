@@ -23,6 +23,7 @@ import { appDir, appRoots, findProfile, hasProfile, profilePath, slug } from "./
 import { SQUAD_ROOT } from "./spec.ts";
 import { pickTrack } from "./library.ts";
 import { extractStyle, loadStyle, pt, type Mood, type StyleProfile } from "./style.ts";
+import { probe } from "./measure.ts";
 
 export type Field = "destination" | "format" | "mood" | "reference" | "text";
 export interface Option { value: string; label: string; description: string }
@@ -30,8 +31,12 @@ export interface Question { id: Field | "same_profile" | "first_use"; header: st
 export interface BriefInput { client: string; text?: string; transcript?: string; material?: string[]; references?: string[]; niche?: string; first_use?: boolean; session?: "new" | "ongoing"; lang?: string }
 export interface History { folder: boolean; briefs: number; confirmed: number; profiles: number }
 export interface FirstUse { status: "yes" | "no" | "ask"; reason: string; lang: "pt" | "en"; round: number; show_now: boolean; welcome: string | null; history: History }
+/**
+ * cleanup "none" (2.3.0): continuous, no cuts (sermon, service, "sem cortes"); canvas: output size; caption_preset "word":
+ * one word at a time; caption_font: a font named in the message (the person supplies the file).
+ */
 export interface Known { destination?: string; format?: string; mood?: string; reference?: string; captions?: boolean; headline?: boolean; headline_text?: string;
-  cleanup?: "standard" | "keep_pauses" | "off"; fit_s?: number }
+  cleanup?: "standard" | "keep_pauses" | "off" | "none"; fit_s?: number; canvas?: "1080x1920" | "1920x1080" | "same-as-source"; caption_preset?: "word"; caption_font?: string }
 export interface Niche { id: string; name: string; match: string[]; recommend: Partial<Record<Field, string>>; apply: Partial<StyleProfile["apply"]>; tips: string[] }
 export interface BriefState {
   brief_version: 1; id: string; dir: string; project: string; client: string; created_at: string;
@@ -41,14 +46,14 @@ export interface BriefState {
 }
 /** cleanup (2.2.0): the standard cleanup of every full edit (cli.ts cut), unless the person asked otherwise; fit_s: "caber em N segundos". */
 export interface Plan { template: string; platforms: string[]; apply: StyleProfile["apply"]; headline_text: string | null; music_track: string | null; notes: string[]; markdown: string;
-  cleanup?: "standard" | "keep_pauses" | "off"; fit_s?: number | null }
+  cleanup?: "standard" | "keep_pauses" | "off" | "none"; fit_s?: number | null }
 
 const OTHER: Option = { value: "other", label: "Outro", description: "escreva do seu jeito" };
 const BANK: Record<Field, Omit<Question, "recommended">> = {
   destination: { id: "destination", header: "Destino", question: "Onde esse vídeo vai ser postado?", options: [
     { value: "reels_tiktok", label: "Reels / TikTok", description: "9:16 com as áreas seguras do Instagram e do TikTok" },
     { value: "youtube_shorts", label: "YouTube Shorts", description: "9:16 com a área segura do Shorts" },
-    { value: "youtube_long", label: "YouTube longo", description: "o motor entrega 9:16; vídeo deitado ainda não tem template" },
+    { value: "youtube_long", label: "YouTube longo", description: "16:9 deitado, com a área segura do player" },
     { value: "ad", label: "Anúncio", description: "criativo pago, gancho forte nos 3 primeiros segundos" },
     { value: "lesson", label: "Aula", description: "ritmo mais calmo e legenda clara" }, OTHER] },
   format: { id: "format", header: "Formato", question: "Qual é o formato do vídeo?", options: [
@@ -175,12 +180,22 @@ export function extract(text: string): { known: Known; sources: Record<string, s
   if (any(t, /(divertid|engracad|bem humorad|fun\b|funny|descontraid)/)) set("mood", "fun");
   if (any(t, /(sem legenda|no captions)/)) set("captions", false);
   else if (any(t, /(legenda|captions?)/)) set("captions", true);
-  if (any(t, /(sem headline|sem titulo|sem texto fixo)/)) set("headline", false);
+  if (any(t, /(sem headline|sem titulo|sem texto fixo)/) || any(t, /(remov\w*|tir[ae]\w*)\s+(tambem\s+)?((a|aquela|essa|esta|o|esse)\s+)?(headline|titulo)/)) set("headline", false);
+  // 2.3.0: one word at a time; a font named in the message ("Fonte: Delight com negrito")
+  if (any(t, /(palavra por palavra|uma palavra por vez|word by word|one word at a time)/)) { set("caption_preset", "word"); set("captions", true); }
+  const fm = text.match(/\bfonte\s*[:=]?\s*([A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9 -]{1,30}?)(?=\s+(?:com|em|e|negrito|bold|na|no)\b|[,.;\n]|$)/i);
+  if (fm && !/^(maior|menor|grande|pequena|bonita|legivel|legível|boa|outra|padrao|padrão)$/i.test(fm[1].trim())) set("caption_font", fm[1].trim().replace(/\b\p{L}/gu, (c) => c.toUpperCase()));
+  // 2.3.0: output size
+  if (any(t, /(mesma proporcao|proporcao original|proporcao do video|same aspect|original aspect|same-as-source)/)) set("canvas", "same-as-source");
+  else if (any(t, /(16:9|16x9|16 por 9|horizontal|deitad[oa]|landscape)/)) set("canvas", "1920x1080");
+  else if (any(t, /(9:16|9x16|vertical|em pe\b|portrait)/)) set("canvas", "1080x1920");
   const q = text.match(/(?:headline|t[ií]tulo|chamada|texto de destaque)\s*[:=]?\s*["“']([^"”']{3,80})["”']/i) ?? text.match(/["“]([^"”]{3,80})["”]/);
   if (q) { set("headline", true); set("headline_text", q[1].trim()); }
   if (any(t, /(sem referencia|nenhuma referencia|no reference)/)) set("reference", "none");
-  // standard cleanup (2.2.0): it is the default; the message can keep the pauses or switch the cleanup off
-  if (any(t, /(sem limpeza|sem cortar nada|nao corta nada|nao corte nada|nao mexe no corte|nao mexa no corte|deixa como esta|no cleanup|no cuts|keep everything)/)) set("cleanup", "off");
+  // standard cleanup (2.2.0): it is the default; the message can keep the pauses or switch the cleanup off.
+  // 2.3.0: a sermon, a service or "sem cortes" is continuous (cleanup "none"): the video plays whole
+  if (any(t, /\b(ministracao|pregacao|culto|sermao|sem cortes?|continuo|sem nenhum corte|no cuts at all|continuous|sermon|church service)\b/)) set("cleanup", "none");
+  else if (any(t, /(sem limpeza|sem cortar nada|nao corta nada|nao corte nada|nao mexe no corte|nao mexa no corte|deixa como esta|no cleanup|no cuts|keep everything)/)) set("cleanup", "off");
   else if (any(t, /((mantem|mantenha|manter|deixa|deixe|nao tira|nao tire|sem tirar) (as |essas )?pausas|keep (the |my )?pauses)/)) set("cleanup", "keep_pauses");
   const fit = t.match(/(caber em|cabe em|caiba em|caibam em|cabendo em|ate|no maximo|encurta(?:r)? (?:pra|para)|reduz(?:ir)? (?:pra|para)|fit (?:in|into)|under|max(?:imum)?)\s*(\d{1,3})\s*(?:s\b|seg\b|segundos|seconds|secs?\b)/);
   if (fit && Number(fit[2]) >= 5 && Number(fit[2]) <= 180) set("fit_s", Number(fit[2]));
@@ -330,7 +345,17 @@ export function buildPlan(s: BriefState, niche: Niche | null, style: StyleProfil
   const mood = k.mood ?? "calm";
   // a reference style wins; otherwise the mood sets pace, music and effects and the niche sets the text look
   const apply: StyleProfile["apply"] = structuredClone(style?.apply ?? MOOD_APPLY[mood] ?? MOOD_APPLY.calm);
-  if (!style) for (const [key, v] of Object.entries(niche?.apply ?? {})) Object.assign((apply as any)[key], v);
+  if (!style) for (const [key, v] of Object.entries(niche?.apply ?? {})) {
+    if (v && typeof v === "object" && (apply as any)[key]) Object.assign((apply as any)[key], v);
+    else (apply as any)[key] = v; // canvas (2.3.0) is a plain value
+  }
+  // 2.3.0: what the message said wins over the niche
+  const cleanupAsked = k.cleanup ?? (apply.cut.mode === "none" ? "none" : undefined);
+  if (cleanupAsked === "none") { apply.cut = { ...apply.cut, mode: "none", zoom_cut_every_s: null, punch_amount: 0 }; apply.sfx.cut_whoosh = false; }
+  if (k.canvas) apply.canvas = k.canvas;
+  if (k.caption_preset === "word") apply.captions = { ...apply.captions, preset: "word", uppercase: false, emphasis_color: null, box: false };
+  if (k.caption_font) apply.captions = { ...apply.captions, font_family: k.caption_font, font_fallback: "Inter" };
+  if (k.destination === "youtube_long" && !apply.canvas) apply.canvas = "1920x1080";
   if (style && k.mood && MOOD_MUSIC[k.mood] && !["profile", "reference"].includes(s.sources.mood)) {
     apply.music = { enabled: true, mood: MOOD_MUSIC[mood] ?? "calm", below_voice_db: style.apply.music.enabled ? style.apply.music.below_voice_db : 22 };
     notes.push(`Música pelo clima que você pediu (${label("mood", mood).toLowerCase()}); o resto vem da referência.`);
@@ -340,13 +365,16 @@ export function buildPlan(s: BriefState, niche: Niche | null, style: StyleProfil
   if (k.headline === false) apply.headline.mode = "none";
   const fmt = k.format === "squad_choice" || !k.format ? recommendFor("format", s, niche) : k.format;
   const template = TEMPLATE[fmt] ?? "talking-head-captions";
-  const platforms = PLATFORMS[k.destination ?? "reels_tiktok"] ?? PLATFORMS.reels_tiktok;
-  if (k.destination === "youtube_long") notes.push("YouTube longo: o motor entrega vídeo em pé (9:16). Vídeo deitado ainda não tem template.");
+  // the canvas decides the family of safe zones (2.3.0): a horizontal one gets the 16:9 platforms
+  const wide = apply.canvas === "1920x1080" || (apply.canvas === "same-as-source" && materialIsWide(s.input.material ?? []));
+  const platforms = wide ? ["youtube_16x9", "screen_16x9"] : PLATFORMS[k.destination ?? "reels_tiktok"] ?? PLATFORMS.reels_tiktok;
+  if (k.destination === "youtube_long" && !wide) notes.push("YouTube longo pedido com proporção em pé: confira se é isso mesmo.");
   if (k.destination === "lesson") { apply.cut.zoom_cut_every_s = null; notes.push("Aula: sem cortes de zoom extras, para a explicação respirar."); }
   for (const [f, v] of Object.entries(s.other)) notes.push(`Você escreveu em "${BANK[f as Field].header}": "${v}". O agente ajusta o plano a isso.`);
   const track = apply.music.enabled && apply.music.mood ? pickTrack(apply.music.mood)?.id ?? null : null;
-  const cleanup = k.cleanup ?? "standard";
-  const cleanLine = cleanup === "off" ? "sem limpeza, como você pediu: o material entra como veio." : cleanup === "keep_pauses"
+  const cleanup = cleanupAsked ?? "standard";
+  const cleanLine = cleanup === "none" ? "nenhuma: o vídeo passa inteiro e contínuo. Pausas, respirações e repetições ficam, sem punch-in, zoom ou reframe (ministração, pregação ou culto pedem assim)."
+    : cleanup === "off" ? "sem limpeza, como você pediu: o material entra como veio." : cleanup === "keep_pauses"
     ? "as pausas ficam, como você pediu; erros, falsos começos e repetições saem, medidos na forma de onda."
     : "pausas longas, respirações, erros, falsos começos e repetições saem sempre, medidos na forma de onda e sem cortar palavra; repetição de propósito (ênfase) fica. Peça para manter, se quiser.";
   const head = headlineSuggestion(s);
@@ -354,10 +382,12 @@ export function buildPlan(s: BriefState, niche: Niche | null, style: StyleProfil
   const md = [
     "## Plano sugerido", "",
     `- **Formato:** ${label("format", fmt).toLowerCase()} (template \`${template}\`), para ${label("destination", k.destination ?? "reels_tiktok")}.`,
-    `- **Cortes:** ${a.cut.zoom_cut_every_s ? `corte de zoom a cada ~${pt(a.cut.zoom_cut_every_s)} s nas pausas da fala` : "só os cortes do material, sem acelerar"}${a.cut.punch_amount ? `, zoom alternando 100/${Math.round(100 + a.cut.punch_amount * 100)} %` : ", sem zoom alternado"}; transição suave entre takes (J-cut).`,
+    ...(a.canvas ? [`- **Proporção:** ${a.canvas === "same-as-source" ? "a do vídeo original" : a.canvas === "1920x1080" ? "16:9 deitado (1920x1080)" : "9:16 em pé (1080x1920)"}.`] : []),
+    a.cut.mode === "none" ? "- **Cortes:** nenhum." : `- **Cortes:** ${a.cut.zoom_cut_every_s ? `corte de zoom a cada ~${pt(a.cut.zoom_cut_every_s)} s nas pausas da fala` : "só os cortes do material, sem acelerar"}${a.cut.punch_amount ? `, zoom alternando 100/${Math.round(100 + a.cut.punch_amount * 100)} %` : ", sem zoom alternado"}; transição suave entre takes (J-cut).`,
     `- **Limpeza:** ${cleanLine}`,
     ...(k.fit_s ? [`- **Duração:** caber em ${k.fit_s} s: saem primeiro as frases repetidas e os desvios, depois as pausas; a lista do que saiu vem no relatório do corte.`] : []),
-    `- **Legenda:** ${a.captions.enabled ? (a.captions.preset === "bold-word" ? "palavra que cresce, caixa alta, palavras-chave em destaque" : "clássica, palavra ativa colorida") : "sem legenda"}.`,
+    `- **Legenda:** ${a.captions.enabled ? (a.captions.preset === "bold-word" ? "palavra que cresce, caixa alta, palavras-chave em destaque" : a.captions.preset === "word"
+      ? `uma palavra por vez, no tempo da fala, branca em negrito com sombra preta suave, fonte ${a.captions.font_family ?? "Inter"}${a.captions.font_fallback ? ` (arquivo seu, na pasta fonts/ do projeto; sem ele, ${a.captions.font_fallback} Bold)` : ""}` : "clássica, palavra ativa colorida") : "sem legenda"}.`,
     `- **Headline:** ${a.headline.mode === "none" ? "sem headline" : `${head ? `"${head}"` : "o texto que você mandar"}, ${a.headline.mode === "fixed" ? "fixa o vídeo todo" : "só nos 3 primeiros segundos"} (${a.headline.font_family})`}.`,
     `- **Música:** ${a.music.enabled ? `clima \`${a.music.mood}\`${track ? `, faixa \`${track}\` (biblioteca CC0 do squad)` : ""}, ${a.music.below_voice_db} LU abaixo da voz` : "sem música"}.`,
     `- **Efeitos:** ${a.sfx.cut_whoosh ? `whoosh baixo (${a.sfx.gain_db} dB) nas trocas de clipe` : "sem efeitos nas viradas"}.`,
@@ -368,6 +398,13 @@ export function buildPlan(s: BriefState, niche: Niche | null, style: StyleProfil
     "", "Posso editar?",
   ].join("\n");
   return { template, platforms, apply, headline_text: a.headline.mode === "none" ? null : head, music_track: track, notes, markdown: md, cleanup, fit_s: k.fit_s ?? null };
+}
+
+/** First video of the material wider than tall (canvas same-as-source, 2.3.0). */
+function materialIsWide(files: string[]): boolean {
+  const v = files.find((f) => !/\.(png|jpe?g|webp)$/i.test(f));
+  if (!v) return false;
+  try { const p = probe(v); return p.width > p.height; } catch { return false; }
 }
 
 const save = (s: BriefState) => writeFileSync(join(s.dir, "state.json"), JSON.stringify(s, null, 2));

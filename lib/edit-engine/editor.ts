@@ -17,11 +17,14 @@ import { basename, dirname, join, resolve } from "node:path";
 import { applyToSpec, pendingMarkdown } from "./apply-feedback.ts";
 import { BadRequest, fileSha256, nowIso, type EmphasisEdit, type Feedback } from "./feedback.ts";
 import type { EditOp } from "./live-ops.ts";
-import { vMetrics } from "./fonts.ts";
+import { familyOf, vMetrics } from "./fonts.ts";
+import { draftSize } from "./canvas.ts";
 import type { QaReport } from "./qa.ts";
 import { loadSpec, resolveSpec, validateSpec, type EditSpec } from "./spec.ts";
 
+/** Quick draft: half the canvas (540x960 for 9:16; 960x540 for 16:9, 2.3.0), veryfast. */
 export const DRAFT = { width: 540, height: 960, preset: "veryfast", crf: 26 } as const;
+export const draftFor = (c: { width: number; height: number }) => ({ ...DRAFT, ...draftSize(c) });
 
 export type JobKind = "base" | "draft" | "final";
 export type Snapshot = { trims: Feedback["trims"]; style: Feedback["style"]; caption_edits: Feedback["caption_edits"]; emphasis: EmphasisEdit[]; ops?: EditOp[] };
@@ -213,15 +216,17 @@ export class EditorSession {
     const s = this.overlayBase(fb);
     const hook = s.texts.find((t) => t.role === "hook") ?? null;
     const c = s.captions ?? null;
-    const families = new Set<string>([hook?.style.font_family ?? "Inter", c?.style.font_family ?? "Inter", "Anton", "Inter"]);
+    // the family each style really renders with (2.3.0: a user font, or its fallback while the file is missing)
+    const used = (st?: { font_family?: string; font_used?: string }) => (st ? familyOf(st) : "Inter");
+    const families = new Set<string>([used(hook?.style), used(c?.style), "Anton", "Inter"]);
     const fonts: Record<string, unknown> = {};
-    for (const f of families) { const m = vMetrics(f); if (m) fonts[f] = { ...m, url: `/fonts/${m.file}` }; }
+    for (const f of families) { const m = vMetrics(f); if (m) fonts[f] = { ...m, url: m.user ? `/fonts/user/${encodeURIComponent(m.file)}` : `/fonts/${m.file}` }; }
     return {
       sig: baseSig(s), canvas: s.canvas, duration: s.duration, fonts,
       hook: hook ? { id: hook.id, lines: hook.lines, mode: hook.mode ?? null, start: hook.start, end: hook.end, x: hook.x, y: hook.y,
-        animation: hook.animation, max_width_px: hook.max_width_px ?? null, highlight_words: hook.highlight_words ?? [], style: hook.style } : null,
+        animation: hook.animation, max_width_px: hook.max_width_px ?? null, highlight_words: hook.highlight_words ?? [], style: { ...hook.style, font_family: used(hook.style) } } : null,
       captions: c ? { preset: c.preset ?? "classic", y: c.y, x: s.canvas.width / 2, max_words: c.max_words, highlight_active: c.highlight_active !== false,
-        emphasis_color: c.emphasis_color ?? null, pop_scale: c.pop_scale ?? 114, windows: resolveSpec(structuredClone(s)).captions?.windows ?? null, max_width_px: c.max_width_px ?? Math.round(s.canvas.width * 0.8), style: c.style,
+        emphasis_color: c.emphasis_color ?? null, pop_scale: c.pop_scale ?? 114, windows: resolveSpec(structuredClone(s)).captions?.windows ?? null, max_width_px: c.max_width_px ?? Math.round(s.canvas.width * 0.8), style: { ...c.style, font_family: used(c.style) },
         words: c.words.map((w) => ({ i: (w as typeof w & { src_index: number }).src_index, word: w.word, start: w.start, end: w.end, emphasis: !!w.emphasis })) } : null,
     };
   }
@@ -328,7 +333,7 @@ export class EditorSession {
     const job = {
       kind, id, plan_spec: planPath, mp4, status: statusFile, frames: Math.round(plan.duration * plan.canvas.fps),
       progress_file: join(this.jobsDir, `${id}.progress.txt`),
-      draft: kind === "final" ? null : DRAFT, no_text: kind === "base", qa: kind === "final",
+      draft: kind === "final" ? null : draftFor(plan.canvas), no_text: kind === "base", qa: kind === "final",
       download: kind === "final" ? { dir: this.downloads, name: downloadName(base.id, n, this.opts.finalName) } : null,
       also_base: also ? { plan_spec: alsoPlan, mp4: also.mp4, sig, progress_file: join(this.jobsDir, `${id}.base.progress.txt`) } : null,
       base_sig: kind === "base" ? sig : null,

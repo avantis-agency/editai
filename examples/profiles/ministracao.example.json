@@ -1,0 +1,19 @@
+{
+  "profile_version": 1,
+  "client": "Ministração (exemplo)",
+  "note": "Example only, never a default: the client profile the guided briefing would save for an editor who asked for a church service clip in its original 16:9, with no cuts, captions one word at a time, white with a soft black shadow, in bold, in a font she supplies (Delight; Inter Bold while the file is missing), no headline, no band, no music. Only style preferences, no personal data. Real profiles live in the user's project at editai/profiles/<client>.json; the font file goes in the project's fonts/ folder, never in the squad.",
+  "niche": "church-ministry",
+  "known": { "destination": "youtube_long", "format": "talking_head", "mood": "premium", "captions": true, "headline": false, "cleanup": "none", "canvas": "same-as-source", "caption_preset": "word", "caption_font": "Delight" },
+  "reference_style": null,
+  "template": "talking-head-captions",
+  "platforms": ["youtube_16x9", "screen_16x9"],
+  "apply": {
+    "cut": { "mode": "none", "zoom_cut_every_s": null, "punch_amount": 0 },
+    "canvas": "same-as-source",
+    "captions": { "enabled": true, "preset": "word", "font_px": 60, "y": 1330, "uppercase": false, "emphasis_color": null, "box": false, "font_family": "Delight", "font_fallback": "Inter" },
+    "headline": { "mode": "none", "y": 350, "font_px": 72, "font_family": "Inter" },
+    "music": { "enabled": false, "mood": null, "below_voice_db": 24 },
+    "sfx": { "cut_whoosh": false, "gain_db": -30 }
+  },
+  "uses": 0
+}

@@ -6,8 +6,12 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { pickSfx, pickTrack, synthAnchor } from "./library.ts";
 import { resolveBroll, validateBroll, type BrollSpec } from "./broll.ts";
 import { validateReframe, type ReframeSpec } from "./reframe.ts";
+import { resolveCanvas, validateCanvas } from "./canvas.ts";
+import { resolveContinuous, validateContinuous } from "./continuous.ts";
+import { resolveFonts, validateFonts } from "./fonts.ts";
 
-export type Platform = "instagram_reels" | "tiktok" | "youtube_shorts" | "facebook_reels";
+/** 9:16 platforms, and (2.3.0) the 16:9 ones: the YouTube horizontal player and a church screen, projector or TV. */
+export type Platform = "instagram_reels" | "tiktok" | "youtube_shorts" | "facebook_reels" | "youtube_16x9" | "screen_16x9";
 export type Animation = "none" | "fade" | "pop_in" | "slide_up" | "line_stagger" | "word_reveal";
 
 export interface Rect { x: number; y: number; w: number; h: number }
@@ -56,7 +60,10 @@ export type CameraMove =
 export interface Flash { at: number; duration: number; color?: string; opacity?: number }
 
 export interface TextStyle {
-  font_family?: string;   // must exist in fontsdir
+  font_family?: string;   // must exist in fontsdir (assets/fonts) or in spec.fonts (a font the person supplied)
+  /** 2.3.0: family used when font_family is not available (a user font that has not arrived yet); resolveSpec writes font_used */
+  font_fallback?: string;
+  font_used?: string;     // written by resolveSpec when font_fallback is set: the family the render really uses; do not hand-edit
   font_px: number;
   size_basis?: "line" | "em"; // line (default) = libass size; em = CSS-like em size, converted with the font's metrics (lib/edit-engine/fonts.ts)
   bold?: boolean;
@@ -65,6 +72,10 @@ export interface TextStyle {
   outline_px?: number;
   outline_color?: string;
   shadow_px?: number;
+  /** 2.3.0 soft shadow (captions preset "word"): blurred shadow, no hard outline. blur in px, alpha = opacity 0..1 */
+  shadow_blur?: number;
+  shadow_color?: string;
+  shadow_alpha?: number;
   box?: boolean;          // opaque box behind the text (ASS BorderStyle 3)
   box_color?: string;
   line_spacing_px?: number; // distance between line centres; used by pop_in, slide_up, fade and none (one event per line)
@@ -88,7 +99,8 @@ export interface TextLayer {
   mode?: "fixed" | "intro"; // headline: fixed = whole video (start 0, end = duration); intro = start..end as written (0-3 s)
 }
 
-export type CaptionPreset = "classic" | "bold-word";
+/** word (2.3.0): one word at a time, in sync with the speech, never accumulating the phrase (ass.ts wordEvents). */
+export type CaptionPreset = "classic" | "bold-word" | "word";
 
 /** Word-level captions (talking head). Words come from a transcriber, never invented. */
 export interface Captions {
@@ -155,6 +167,12 @@ export interface AudioSpec {
  * excuses a silence inside one of them up to `max_s`. `end_hold_s` is the still tail after the last word.
  */
 export interface CutInfo {
+  /**
+   * 2.3.0: "none" = continuous. The video plays whole: no pause, breath or repetition removed, no punch-in,
+   * zoom or reframe (lib/edit-engine/continuous.ts). It wins over the standard cleanup. `"cut": "none"` in a
+   * spec is read as {mode: "none", holds: []}. Absent or "measured": the cut.ts measured cut, as before.
+   */
+  mode?: "measured" | "none";
   file?: string;
   pace?: string;
   holds: { start: number; end: number; max_s: number; why: string }[];
@@ -164,11 +182,30 @@ export interface CutInfo {
 
 export interface HookApplied { hook: string; at: number; why: string; broll?: string }
 
+/**
+ * Fonts the person supplied (2.3.0): a folder (for example <project>/fonts) and/or files, .ttf or .otf, always
+ * outside the squad (the render copies them into its own work folder, never into assets/fonts). The folder
+ * is scanned on every resolve, so a font that arrives later is picked up by the next render of the same spec.
+ */
+export interface UserFonts {
+  dir?: string;
+  files?: string[];
+  license?: string;       // default "fornecida pelo usuário"
+  found?: { family: string; file: string; bold: boolean; license: string }[]; // written by resolveSpec
+}
+
+/** Canvas sizes by name (2.3.0). The templates keep their own {1080x1920} object, so their renders are unchanged. */
+export type CanvasName = "1080x1920" | "1920x1080" | "same-as-source";
+export interface Canvas { width: number; height: number; fps: number }
+
 export interface EditSpec {
   spec_version: 1;
   id: string;
   template: string;
-  canvas: { width: number; height: number; fps: number };
+  /** an object, or a name resolved by resolveSpec ("same-as-source": the first full-frame take's size) */
+  canvas: Canvas;
+  canvas_request?: CanvasName;  // written by resolveSpec: the name the spec asked for
+  fonts?: UserFonts;
   duration: number;
   platforms: Platform[];
   layers: MediaLayer[];
@@ -204,6 +241,7 @@ export function validateSpec(s: EditSpec): string[] {
   if (!s.id || !/^[a-z0-9][a-z0-9._-]*$/i.test(s.id)) p.push("id must be a filename-safe slug");
   const c = s.canvas;
   if (!c || !num(c.width) || !num(c.height) || !num(c.fps)) p.push("canvas needs width, height, fps");
+  p.push(...validateCanvas(s));
   if (!num(s.duration) || s.duration <= 0 || s.duration > 180) p.push("duration must be in (0, 180] s");
   if (!Array.isArray(s.layers) || s.layers.length === 0) p.push("at least one media layer");
   for (const l of s.layers ?? []) {
@@ -247,12 +285,16 @@ export function validateSpec(s: EditSpec): string[] {
     if (d > 0 && (l.in ?? 0) < d - 1e-6 && l.kind === "video") p.push(`layer ${l.id}: dissolve of ${d} s needs ${d} s of source before \`in\``);
   }
   for (const t of s.texts ?? []) if (t.mode && t.mode !== "fixed" && t.mode !== "intro") p.push(`text ${t.id}: mode must be fixed or intro`);
-  if (s.captions?.preset && !["classic", "bold-word"].includes(s.captions.preset)) p.push("captions.preset must be classic or bold-word");
+  if (s.captions?.preset && !["classic", "bold-word", "word"].includes(s.captions.preset)) p.push("captions.preset must be classic, bold-word or word");
   if (!s.hooks_applied?.length) p.push("hooks_applied is empty: name the catalog hooks this spec uses");
   if (!s.alignment?.text || !s.alignment?.visual || !s.alignment?.audio) p.push("alignment needs text, visual and audio");
   p.push(...validateBroll(s));
   p.push(...validateReframe(s));
   for (const h of s.cut?.holds ?? []) if (!(h.end > h.start) || !(h.max_s > 0)) p.push("cut.holds: every hold needs start < end and max_s > 0");
+  if (typeof s.cut === "string") p.push(`cut "${s.cut}" unknown: use "none" (continuous) or the object a measured cut writes`);
+  if (s.cut?.mode && !["measured", "none"].includes(s.cut.mode)) p.push("cut.mode must be measured or none");
+  p.push(...validateContinuous(s));
+  p.push(...validateFonts(s));
   return p;
 }
 
@@ -287,6 +329,10 @@ export function ghostDissolves(s: EditSpec): string[] {
  * sounds, caption windows and hooks (broll.ts resolveBroll; nothing when it is absent or "off").
  */
 export function resolveSpec(s: EditSpec): EditSpec {
+  // 2.3.0: continuous mode, canvas by name and user fonts (each a no-op for a spec that does not ask for it)
+  resolveContinuous(s);
+  resolveCanvas(s);
+  resolveFonts(s);
   resolveBroll(s);
   const a = s.audio as AudioSpec | undefined;
   if (a) {
@@ -348,6 +394,8 @@ export function loadSpec(path: string): EditSpec {
   if (typeof raw.audio?.music === "string") raw.audio.music = { path: raw.audio.music };
   if (raw.audio?.music?.path) raw.audio.music.path = abs(raw.audio.music.path);
   if (raw.audio?.music?.src) raw.audio.music.src = abs(raw.audio.music.src);
+  if (raw.fonts?.dir) raw.fonts.dir = abs(raw.fonts.dir);
+  if (raw.fonts?.files) raw.fonts.files = raw.fonts.files.map(abs);
   resolveSpec(raw);
   return raw;
 }

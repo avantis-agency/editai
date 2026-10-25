@@ -39,7 +39,7 @@ import {
   BadRequest, emptyFeedback, feedbackPathFor, fileSha256, HEADLINE_SIZE_PCT, loadFeedback, nowIso, saveFeedback, styleOfSpec, trimLimits, UNDO_LIMIT,
   validateApproval, validateCaptionEdits, validateEmphasis, validateMarks, validateStyle, validateTrims, videoPathFor, type Feedback, type Section,
 } from "./feedback.ts";
-import { fontFile } from "./fonts.ts";
+import { fontFile, userFontFiles } from "./fonts.ts";
 import { LiveDesk } from "./live.ts";
 import { probe } from "./measure.ts";
 import { FONTS_DIR, loadSpec, takes, type EditSpec } from "./spec.ts";
@@ -361,6 +361,13 @@ export function makeHandler(s: PreviewSession) {
     if (route === "/media/version") {
       const p = s.editor.versionPath(url.searchParams.get("id") ?? "");
       return p ? media(req, p) : fail(404, "versão desconhecida");
+    }
+    if (route.startsWith("/fonts/user/")) {
+      // a font the person supplied (2.3.0, spec.fonts): only a file the spec itself found, by name
+      const name = decodeURIComponent(route.slice(12));
+      const file = userFontFiles().find((f) => basename(f) === name);
+      if (!file) return fail(404, "não encontrado");
+      return new Response(Bun.file(file), { headers: { "Content-Type": /\.otf$/i.test(file) ? "font/otf" : "font/ttf", "Cache-Control": "max-age=86400", "X-Content-Type-Options": "nosniff" } });
     }
     if (route.startsWith("/fonts/")) {
       const name = route.slice(7);

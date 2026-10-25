@@ -1,0 +1,19 @@
+{
+  "id": "church-ministry",
+  "name": "Igreja / ministração",
+  "summary": "Pregação, ministração, culto ou devocional: a fala passa inteira e contínua, na proporção em que foi gravada.",
+  "match": ["igreja", "ministracao", "pregacao", "pregador", "culto", "sermao", "pastor", "pastora", "louvor", "palavra de deus", "devocional", "church", "sermon"],
+  "recommend": { "destination": "youtube_long", "mood": "premium", "reference": "none", "text": "captions" },
+  "apply": {
+    "cut": { "mode": "none", "zoom_cut_every_s": null, "punch_amount": 0 },
+    "canvas": "same-as-source",
+    "captions": { "enabled": true, "preset": "word", "font_px": 60, "uppercase": false, "emphasis_color": null, "box": false },
+    "headline": { "mode": "none" },
+    "music": { "enabled": false, "mood": null },
+    "sfx": { "cut_whoosh": false }
+  },
+  "tips": [
+    "Sem cortes: a ministração tem o próprio ritmo, e as pausas fazem parte dela.",
+    "Sem B-roll e sem whoosh. Se quiser fundo musical, peça um piano baixo com ducking, numa versão à parte."
+  ]
+}

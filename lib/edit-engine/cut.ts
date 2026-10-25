@@ -32,6 +32,12 @@
 // Output in <project>/editai/cut/<name>/: cut.json (takes, words files, holds, removals, proof), CORTE.md
 // (the report: draft and final side by side, what was cut with times and why) and edit/ (editonny files).
 // Without editonny: exit 3 (the takes are then written by hand or by the agent, as before).
+//
+// --continuous (2.3.0, cut "none"): for a church service, a sermon or anything that must play whole. Only
+// steps 1, 2, 10 and 11 run: diagnosis, words, measured onsets and spelling for the captions, optional
+// denoise. Steps 3 to 9 (draft, review, edges, pace, fit, proof) do not: nothing is cut, and each source
+// becomes one take from its first to its last frame. cut.json says mode "none"; th-batch then builds a
+// continuous spec (no punch-in, zoom or reframe; lib/edit-engine/continuous.ts).
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { editonnyStatus, runHelper, type EditonnyStatus } from "./editonny.ts";
@@ -60,10 +66,11 @@ export interface CutPlan { keep?: Sel[]; drop?: Sel[]; optional?: Sel[] }
 export interface CutOptions {
   inputs: string[]; project: string; name?: string; lang?: string; prompt?: string; script?: string; fix?: Record<string, string>;
   plan?: CutPlan; pace?: Pace; fit?: number; denoise?: DenoiseMode | "auto"; audit?: boolean; dryRun?: boolean; jcutFrames?: number;
+  continuous?: boolean;   // 2.3.0: cut "none", the sources whole (see the header)
 }
 export interface CutTake { id: string; src: string; in: number; duration: number; framing: string; beat: string; quote: string; audio_src?: string }
 export interface CutResult {
-  cut_version: 1; name: string; dir: string; edit_dir: string; sources: Record<string, string>; pace: Pace; jcut_frames: number;
+  cut_version: 1; mode?: "measured" | "none"; name: string; dir: string; edit_dir: string; sources: Record<string, string>; pace: Pace; jcut_frames: number;
   takes: CutTake[]; words_files: Record<string, string>; holds: { start: number; end: number; max_s: number; why: string }[]; end_hold_s: number;
   duration: { raw: number; draft: number; final: number };
   removed: { source: string; start: number; end: number; text: string; why: string; by: string }[];
@@ -242,7 +249,7 @@ export async function runCut(o: CutOptions): Promise<CutResult> {
   const stems = files.map((f) => basename(f).replace(/\.[^.]+$/, ""));
   const sources: Record<string, string> = Object.fromEntries(stems.map((s, i) => [s, files[i]]));
   const res: CutResult = {
-    cut_version: 1, name, dir, edit_dir: edit, sources, pace, jcut_frames: jf, takes: [], words_files: {}, holds: [], end_hold_s: 0,
+    cut_version: 1, mode: o.continuous ? "none" : "measured", name, dir, edit_dir: edit, sources, pace, jcut_frames: jf, takes: [], words_files: {}, holds: [], end_hold_s: 0,
     duration: { raw: r3(files.reduce((s, f) => s + probe(f).duration, 0)), draft: 0, final: 0 }, removed: [], kept_against_draft: [],
     fit: { target: o.fit ?? null, ok: null, removed: [], note: "" }, diagnosis: null, denoise: { mode: String(o.denoise ?? "off"), sources: {} },
     verify: { flags: [], clicks: null, inside_words: null, within_speech: null, passes: 0, report: null },
@@ -262,6 +269,76 @@ export async function runCut(o: CutOptions): Promise<CutResult> {
     const tr = JSON.parse(readFileSync(join(edit, "transcripts", `${s}.json`), "utf8"));
     for (const w of tr.words ?? []) if (w.start !== null && w.start !== undefined) words.push({ text: String(w.text).trim(), start: w.start, end: w.end, prob: w.prob, stem: s, i: words.length });
   }
+  // script alignment: spelling, punctuation (sentence and comma ends) and the expected speech
+  const sTok = o.script ? scriptTokens(o.script) : [];
+  const fix = o.fix ?? {};
+  const fixN = (w: string) => norm(fix[norm(w)] ?? w);
+  const amap = sTok.length ? alignTokens(words.map((w) => fixN(w.text)), sTok.map((t) => t.n)) : [];
+  const punctOf = (w: TWord): string => {
+    const j = amap[w.i];
+    if (j !== null && j !== undefined) return sTok[j].punct;
+    return (w.text.match(/[.,!?;:…]+$/u)?.[0] ?? "");
+  };
+
+  // 10. words for captions: measured onsets, script spelling, --fix
+  const captionWords = () => {
+    const wfDir = join(dir, "words");
+    mkdirSync(wfDir, { recursive: true });
+    for (const s of stems) {
+      const aw = join(edit, "verify", `words_${s}.json`);
+      helper(st, "align_words", ["--video", sources[s], "--transcript", join(edit, "transcripts", `${s}.json`), "--all", "-o", aw], edit, log);
+      let onsets: any[] = [];
+      try { const j = JSON.parse(readFileSync(aw, "utf8")); onsets = j.words ?? j; } catch { onsets = []; }
+      let moved = 0, refused = 0;
+      const byI = new Map(onsets.map((m: any, k: number) => [m?.i ?? k, m]));
+      const out = words.filter((w) => w.stem === s).map((w, k) => {
+        const m: any = byI.get(k);
+        let start = w.start;
+        const ws = Number(m?.start);
+        if (Number.isFinite(ws) && Math.abs(ws - w.start) >= 0.01) {
+          if (Math.abs(ws - w.start) <= 0.25 && ws < w.end - 0.02) { start = ws; moved++; } else refused++;
+        }
+        const j = amap[w.i];
+        let text = j !== null && j !== undefined ? sTok[j].word : (fix[norm(w.text)] ?? w.text.replace(/[.,!?;:…]+$/u, ""));
+        const p = j !== null && j !== undefined ? sTok[j].punct : (w.text.match(/[.,!?;:…]+$/u)?.[0] ?? "");
+        text += p.replace(/[.…]/g, "");   // the caption breaks at the pause; the full stop stays out, comma and question mark stay
+        return { word: text, start: r3(start), end: r3(w.end), whisper: w.text };
+      });
+      const file = join(wfDir, `${s}.words.json`);
+      writeFileSync(file, JSON.stringify({ source: sources[s], engine: "editonny faster-whisper + align_words (onsets) + EditAi spelling", language: lang,
+        words: out, note: `source-time words; ${moved} onsets moved by align_words (<= 0.25 s), ${refused} refused (larger jumps are not trusted); spelling from ${sTok.length ? "the script, word by word" : "the transcriber"}${Object.keys(fix).length ? " and --fix" : ""}` }, null, 2));
+      res.words_files[basename(sources[s])] = file;
+    }
+  };
+  // 11. denoise
+  const denoise = () => {
+    const dmode: DenoiseMode = o.denoise === "auto" ? (res.diagnosis?.suggest ?? "off") : (o.denoise ?? "off");
+    res.denoise.mode = o.denoise === "auto" ? `auto -> ${dmode}` : dmode;
+    if (dmode !== "off") for (const s of stems) {
+      const d = denoiseSource(sources[s], dmode, edit, appDir(o.project, "cache", "denoise"));
+      if (d.ok) { res.denoise.sources[s] = d.wav!; notes.push(`denoise ${d.applied} em ${s}: piso de ruído ${d.report?.floor_before_db ?? "?"} -> ${d.report?.floor_after_db ?? "?"} dBFS (${d.report?.profile?.how ?? ""})`); }
+      else notes.push(`denoise em ${s} não aplicado: ${d.reason}`);
+    }
+  };
+
+  // continuous (2.3.0, cut "none"): nothing is cut; each source is one take, first to last frame
+  if (o.continuous) {
+    captionWords();
+    denoise();
+    res.pace = pace;
+    res.takes = stems.map((stem, k) => {
+      const t: CutTake = { id: `c${String(k + 1).padStart(2, "0")}`, src: sources[stem], in: 0, duration: r3(probe(sources[stem]).duration), framing: "talking-head", beat: "inteiro",
+        quote: words.filter((w) => w.stem === stem).slice(0, 8).map((w) => w.text).join(" ") };
+      if (res.denoise.sources[stem]) t.audio_src = res.denoise.sources[stem];
+      return t;
+    });
+    res.duration.draft = res.duration.raw;
+    res.duration.final = r3(res.takes.reduce((a, t) => a + t.duration, 0));
+    notes.push("contínuo (cut none): nada foi cortado; rascunho, revisão, bordas, ritmo, caber em N s e a prova do corte não rodam");
+    writeOut(res, log);
+    return res;
+  }
+
   // 3. phrases, 4. draft
   helper(st, "pack_transcripts", ["--edit-dir", edit], edit, log);
   const ra = helper(st, "assemble_cut", ["--edit-dir", edit, "--sources", ...files, "--pause", "0.35", "--format", "horizontal"], edit, log);
@@ -281,17 +358,6 @@ export async function runCut(o: CutOptions): Promise<CutResult> {
     else if (b.draft === "dropped") res.kept_against_draft.push({ source: b.stem, start: r2(b.a), end: r2(b.b), text: b.text, why: b.decision! });
   }
   writeFileSync(join(edit, "review.json"), JSON.stringify(blocks, null, 2));
-
-  // script alignment: spelling, punctuation (sentence and comma ends) and the expected speech
-  const sTok = o.script ? scriptTokens(o.script) : [];
-  const fix = o.fix ?? {};
-  const fixN = (w: string) => norm(fix[norm(w)] ?? w);
-  const amap = sTok.length ? alignTokens(words.map((w) => fixN(w.text)), sTok.map((t) => t.n)) : [];
-  const punctOf = (w: TWord): string => {
-    const j = amap[w.i];
-    if (j !== null && j !== undefined) return sTok[j].punct;
-    return (w.text.match(/[.,!?;:…]+$/u)?.[0] ?? "");
-  };
 
   // the selection, one interval per kept block (waveform_cut refines and splits it)
   const env = new Map<string, { db: Float32Array; th: number }>();
@@ -466,43 +532,9 @@ export async function runCut(o: CutOptions): Promise<CutResult> {
     }
   }
 
-  // 10. words for captions: measured onsets, script spelling, --fix
-  const wfDir = join(dir, "words");
-  mkdirSync(wfDir, { recursive: true });
-  for (const s of stems) {
-    const aw = join(edit, "verify", `words_${s}.json`);
-    helper(st, "align_words", ["--video", sources[s], "--transcript", join(edit, "transcripts", `${s}.json`), "--all", "-o", aw], edit, log);
-    let onsets: any[] = [];
-    try { const j = JSON.parse(readFileSync(aw, "utf8")); onsets = j.words ?? j; } catch { onsets = []; }
-    let moved = 0, refused = 0;
-    const byI = new Map(onsets.map((m: any, k: number) => [m?.i ?? k, m]));
-    const out = words.filter((w) => w.stem === s).map((w, k) => {
-      const m: any = byI.get(k);
-      let start = w.start;
-      const ws = Number(m?.start);
-      if (Number.isFinite(ws) && Math.abs(ws - w.start) >= 0.01) {
-        if (Math.abs(ws - w.start) <= 0.25 && ws < w.end - 0.02) { start = ws; moved++; } else refused++;
-      }
-      const j = amap[w.i];
-      let text = j !== null && j !== undefined ? sTok[j].word : (fix[norm(w.text)] ?? w.text.replace(/[.,!?;:…]+$/u, ""));
-      const p = j !== null && j !== undefined ? sTok[j].punct : (w.text.match(/[.,!?;:…]+$/u)?.[0] ?? "");
-      text += p.replace(/[.…]/g, "");   // the caption breaks at the pause; the full stop stays out, comma and question mark stay
-      return { word: text, start: r3(start), end: r3(w.end), whisper: w.text };
-    });
-    const file = join(wfDir, `${s}.words.json`);
-    writeFileSync(file, JSON.stringify({ source: sources[s], engine: "editonny faster-whisper + align_words (onsets) + EditAi spelling", language: lang,
-      words: out, note: `source-time words; ${moved} onsets moved by align_words (<= 0.25 s), ${refused} refused (larger jumps are not trusted); spelling from ${sTok.length ? "the script, word by word" : "the transcriber"}${Object.keys(fix).length ? " and --fix" : ""}` }, null, 2));
-    res.words_files[basename(sources[s])] = file;
-  }
 
-  // 11. denoise
-  const dmode: DenoiseMode = o.denoise === "auto" ? (res.diagnosis?.suggest ?? "off") : (o.denoise ?? "off");
-  res.denoise.mode = o.denoise === "auto" ? `auto -> ${dmode}` : dmode;
-  if (dmode !== "off") for (const s of stems) {
-    const d = denoiseSource(sources[s], dmode, edit, appDir(o.project, "cache", "denoise"));
-    if (d.ok) { res.denoise.sources[s] = d.wav!; notes.push(`denoise ${d.applied} em ${s}: piso de ruído ${d.report?.floor_before_db ?? "?"} -> ${d.report?.floor_after_db ?? "?"} dBFS (${d.report?.profile?.how ?? ""})`); }
-    else notes.push(`denoise em ${s} não aplicado: ${d.reason}`);
-  }
+  captionWords();
+  denoise();
 
   // the takes, the holds on the timeline
   let at = 0;
@@ -526,6 +558,22 @@ export async function runCut(o: CutOptions): Promise<CutResult> {
 function writeOut(res: CutResult, log: string[], blocks: Block[] = []) {
   mkdirSync(res.dir, { recursive: true });
   writeFileSync(join(res.dir, "cut.json"), JSON.stringify(res, null, 2));
+  if (res.mode === "none") {
+    // continuous (2.3.0): what was measured, and that nothing was cut
+    writeFileSync(join(res.dir, "CORTE.md"), [
+      `# Sem cortes (contínuo) · ${res.name}`, "",
+      `Material: ${Object.values(res.sources).map((s) => `\`${basename(s)}\``).join(", ")} · ${res.duration.raw.toFixed(1)} s, **inteiro**: nenhuma pausa, respiração ou repetição sai, e não há punch-in, zoom nem reframe.`, "",
+      "## Diagnóstico do áudio", "",
+      ...(res.diagnosis?.ok ? res.diagnosis.sources.map((s) => `- \`${basename(s.file)}\`: voz ${s.speech_db} dB, fundo ${s.noise_db} dB, diferença ${s.snr_db} dB (${s.level}); clipping ${s.clipping ?? "?"}; eco ${s.echo ?? "?"}. Sugestão do editonny: denoise \`${s.suggest}\`.`) : [`- ${res.diagnosis?.text ?? "não rodou"}`]),
+      `- Denoise: ${res.denoise.mode}${Object.keys(res.denoise.sources).length ? ` (${Object.keys(res.denoise.sources).join(", ")})` : ""}. As métricas são indícios; ouça antes de chamar de defeito.`, "",
+      "## Takes", "", ...res.takes.map((t) => `- ${t.id}: \`${basename(t.src)}\` de 0 a ${t.duration.toFixed(3)} s (a fonte inteira)${t.audio_src ? ", voz limpa" : ""}`), "",
+      "## Notas", "", ...(res.notes.length ? res.notes.map((x) => `- ${x}`) : ["- nenhuma"]), "",
+      "## Usar no EditAi", "",
+      "No lote de talking head (`th-batch`), o item recebe `\"cut\": \"" + join(res.dir, "cut.json").replace(/\\/g, "/") + "\"`: a fonte inteira, as palavras medidas e o modo sem cortes.", "",
+      "## Comandos do editonny", "", "```", ...log, "```", "",
+    ].join("\n"));
+    return;
+  }
   const rows = blocks.map((b) => `| ${b.stem} ${ts(b.a)}-${ts(b.b)} | ${b.text.replace(/\|/g, "/").slice(0, 70)} | ${b.draft === "kept" ? "fica" : "sai"} | ${b.kept ? "fica" : "sai"} | ${(b.decision ?? "").replace(/\|/g, "/")} |`);
   const md = [
     `# Corte medido · ${res.name}`, "",

@@ -5,14 +5,16 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { blackFrames, intersect, loudness, measureTextBox, probe } from "./measure.ts";
-import { ALL_PLATFORMS, measureTime, unsafeRects } from "./safezones.ts";
+import { measureTime, platformsFor, unsafeRects } from "./safezones.ts";
 import { captionGroups, captionStyle, widestMoment } from "./ass.ts";
 import { zoomAt } from "./ffmpeg.ts";
-import { assSize } from "./fonts.ts";
+import { assSize, familyOf } from "./fonts.ts";
 import { adjacent, ghostDissolves, resolveSpec, SQUAD_ROOT, takes, type EditSpec, type Rect } from "./spec.ts";
 import { brollChecks, brollOn, contactSheet } from "./broll.ts";
 import { breathsRemaining } from "./silence.ts";
 import { reframeChecks } from "./reframe.ts";
+import { captionBackground, landscapeChecks, softShadowOnly } from "./canvas.ts";
+import { captionSync, continuityChecks, continuousOn } from "./continuous.ts";
 
 /** Distinct zoom values (3 decimals) the camera reaches between two timeline seconds. */
 function zoomsDuring(spec: EditSpec, s: number, e: number): number[] {
@@ -84,7 +86,8 @@ export function runQa(spec: EditSpec, video: string, opts: { reportDir?: string;
     measured.caption_group_boxes = perGroup;
   }
   measured.text_boxes = boxes;
-  for (const platform of ALL_PLATFORMS) {
+  // the platforms of the canvas orientation (2.3.0): a 9:16 canvas is measured against the same four as before
+  for (const platform of platformsFor(W, H)) {
     const target = spec.platforms.includes(platform);
     const zones = unsafeRects(platform, W, H);
     const hits: string[] = [];
@@ -130,9 +133,15 @@ export function runQa(spec: EditSpec, video: string, opts: { reportDir?: string;
 
   // 2c. reframe (2.2.0): every measured face sample inside the crop window; the camera's motion
   for (const c of reframeChecks(spec)) add(c);
+  // 2d. horizontal canvas (2.3.0): captions in the lower third; what is behind a caption drawn with a soft shadow only
+  for (const c of landscapeChecks(spec, perGroup)) add(c);
+  if (spec.captions && softShadowOnly(captionStyle(spec.captions))) for (const c of captionBackground(spec, perGroup, video, work)) add(c);
+  // 2e. continuous mode (2.3.0): the sources whole, no scene cut the source does not have; caption sync
+  for (const c of continuityChecks(spec, video)) add(c);
+  for (const c of captionSync(spec, work)) add(c);
 
   // 3. legibility and dwell time
-  const scale = H / 1920;
+  const scale = Math.min(W, H) / 1080; // = H / 1920 on every 9:16 canvas; the short side on a 16:9 one (2.3.0)
   for (const t of spec.texts) {
     const min = Math.round(MIN_FONT[t.role] * scale);
     const lineT = assSize(t.style.font_px, t.style);
@@ -161,9 +170,16 @@ export function runQa(spec: EditSpec, video: string, opts: { reportDir?: string;
     const lineC = assSize(smallest, cst);
     add({ id: "font_size_captions", blocking: true, pass: lineC >= min, detail: `${cst.font_px}px${cst.size_basis === "em" ? " em" : ""}${smallest < cst.font_px ? `, smallest fitted group ${smallest}px` : ""} = ${lineC}px libass (floor ${min}px for captions)`, tool: "spec + lib/edit-engine/fonts.ts" });
     add({ id: "caption_group_size", blocking: false, pass: spec.captions.max_words <= 4, detail: `${spec.captions.max_words} words per group (comfort 1-4)`, tool: "spec" });
-    add({ id: "contrast_captions", blocking: true, pass: !!cst.box || (cst.outline_px ?? 0) >= 3, detail: cst.box ? "opaque box" : `outline ${cst.outline_px ?? 0}px`, tool: "spec" });
-    add({ id: "caption_preset", blocking: false, info: true, pass: true, detail: `${spec.captions.preset ?? "classic"}, font ${cst.font_family ?? "Inter"}`, tool: "spec" });
+    // a soft shadow (2.3.0) counts when it is dark enough and offset; caption_background says what is behind it
+    const soft = (cst.shadow_blur ?? 0) > 0 && (cst.shadow_alpha ?? 0.85) >= 0.5 && (cst.shadow_px ?? 0) >= 2;
+    add({ id: "contrast_captions", blocking: true, pass: !!cst.box || (cst.outline_px ?? 0) >= 3 || soft,
+      detail: cst.box ? "opaque box" : (cst.outline_px ?? 0) >= 3 || !soft ? `outline ${cst.outline_px ?? 0}px` : `soft shadow ${cst.shadow_px}px, blur ${cst.shadow_blur}, ${Math.round((cst.shadow_alpha ?? 0.85) * 100)}% ${cst.shadow_color ?? "#000000"}`, tool: "spec" });
+    add({ id: "caption_preset", blocking: false, info: true, pass: true, detail: `${spec.captions.preset ?? "classic"}, font ${familyOf(cst)}`, tool: "spec" });
+    if (cst.font_fallback) add({ id: "caption_font", blocking: false, info: true, pass: true,
+      detail: familyOf(cst) === (cst.font_family ?? "Inter") ? `${cst.font_family} (pedida e usada)` : `${cst.font_family} pedida e não encontrada: ${familyOf(cst)} no lugar (substituta declarada)`, tool: "lib/edit-engine/fonts.ts" });
   }
+  if (spec.fonts?.found?.length) add({ id: "fonts_user", blocking: false, info: true, pass: true,
+    detail: spec.fonts.found.map((f) => `${f.family} (${basename(f.file)}, licença: ${f.license})`).join("; ") + "; copiadas só para a pasta de trabalho do render", tool: "lib/edit-engine/fonts.ts" });
   for (const t of spec.texts.filter((x) => x.mode)) {
     add({ id: `headline_mode_${t.id}`, blocking: false, info: true, pass: true, detail: `${t.mode}: on screen ${t.start.toFixed(2)}-${t.end.toFixed(2)} s, ${t.style.font_px}px`, tool: "spec" });
   }
@@ -219,7 +235,9 @@ export function runQa(spec: EditSpec, video: string, opts: { reportDir?: string;
     measured.breaths = br;
     const kept = br.found.filter((x) => x.why);
     const list = (xs: { start: number; end: number; dur: number }[]) => xs.slice(0, 6).map((x) => `${x.start.toFixed(2)}-${x.end.toFixed(2)} s (${x.dur.toFixed(2)} s)`).join(", ");
-    add({ id: "breaths_remaining", blocking: !!spec.cut, info: !spec.cut, pass: br.unintended.length === 0,
+    if (continuousOn(spec)) add({ id: "breaths_remaining", blocking: false, info: true, pass: true,
+      detail: `contínuo (cut none): ${br.found.length} pausa(s) de ${br.min_s} s ou mais, todas do original e mantidas de propósito`, tool: "voz do spec renderizada sozinha (silence.ts)" });
+    else add({ id: "breaths_remaining", blocking: !!spec.cut, info: !spec.cut, pass: br.unintended.length === 0,
       detail: (br.unintended.length ? `${br.unintended.length} silêncio(s) de ${br.min_s} s ou mais que ninguém pediu: ${list(br.unintended)}` : `nenhum silêncio de ${br.min_s} s ou mais fora das pausas pedidas`) +
         (kept.length ? `; ${kept.length} pedido(s): ${kept.slice(0, 6).map((x) => `${x.start.toFixed(2)} s ${x.why}`).join(", ")}` : "") + (spec.cut ? "" : " (sem corte medido: só informa)"),
       tool: `voz do spec renderizada sozinha, janelas de 10 ms abaixo de ${br.threshold_db} dB (regra do breaths.py / waveform_cut do editonny, portada em Bun)` });
@@ -249,6 +267,7 @@ export function runQa(spec: EditSpec, video: string, opts: { reportDir?: string;
       "Triple alignment: seeing only the frame, could a viewer guess the text? (Kallaway, references/kallaway-method/08-spoken-hooks.md)",
       "Text does not cover eyes or mouth when protect_regions was not declared",
       "Hook pacing feels intentional, not noisy (no more than one bass hit per 5 s)",
+      ...(spec.captions && softShadowOnly(captionStyle(spec.captions)) ? ["White captions over a soft shadow: readable over the brightest part of the picture (see caption_background)"] : []),
     ],
   };
   writeFileSync(join(reportDir, `${spec.id}.qa.json`), JSON.stringify(report, null, 2));
