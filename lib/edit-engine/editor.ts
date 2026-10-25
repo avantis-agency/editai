@@ -71,7 +71,9 @@ export function editKey(spec: EditSpec): string {
 
 /** Key of the picture timing only (takes, camera, length): the clean base matches the overlay when this matches. */
 export function baseSig(spec: EditSpec): string {
-  return sha1(JSON.stringify([spec.canvas, spec.duration, spec.layers, spec.camera, spec.camera_focus, spec.flashes, spec.transitions])).slice(0, 12);
+  const parts: unknown[] = [spec.canvas, spec.duration, spec.layers, spec.camera, spec.camera_focus, spec.flashes, spec.transitions];
+  if (spec.broll) parts.push(spec.broll.mode, spec.broll.items, spec.broll.marks ?? []); // B-roll is in the picture (2.1.0)
+  return sha1(JSON.stringify(parts)).slice(0, 12);
 }
 
 export function snapshot(fb: Feedback | null): Snapshot {
@@ -218,7 +220,7 @@ export class EditorSession {
       hook: hook ? { id: hook.id, lines: hook.lines, mode: hook.mode ?? null, start: hook.start, end: hook.end, x: hook.x, y: hook.y,
         animation: hook.animation, max_width_px: hook.max_width_px ?? null, highlight_words: hook.highlight_words ?? [], style: hook.style } : null,
       captions: c ? { preset: c.preset ?? "classic", y: c.y, x: s.canvas.width / 2, max_words: c.max_words, highlight_active: c.highlight_active !== false,
-        emphasis_color: c.emphasis_color ?? null, pop_scale: c.pop_scale ?? 114, max_width_px: c.max_width_px ?? Math.round(s.canvas.width * 0.8), style: c.style,
+        emphasis_color: c.emphasis_color ?? null, pop_scale: c.pop_scale ?? 114, windows: resolveSpec(structuredClone(s)).captions?.windows ?? null, max_width_px: c.max_width_px ?? Math.round(s.canvas.width * 0.8), style: c.style,
         words: c.words.map((w) => ({ i: (w as typeof w & { src_index: number }).src_index, word: w.word, start: w.start, end: w.end, emphasis: !!w.emphasis })) } : null,
     };
   }

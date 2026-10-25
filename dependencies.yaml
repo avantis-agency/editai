@@ -51,6 +51,16 @@ system:
 # with APIFY_TOKEN (the Apify path of instagram-intelligence-nirvana). Without
 # them, the person sends the video file. Downloads go to the user's project.
 
+# Optional automatic B-roll cards, since 2.1.0:
+#   bun lib/edit-engine/cli.ts broll-suggest <spec.json> --project <dir>   and   broll-render <spec.json>
+# call editonny 1.0.0's helpers/suggest_visuals.py (moments in the words),
+# helpers/render_visuals.py (cards as QuickTime Animation .mov with alpha, cached in
+# <project>/editai/cache/broll/) and helpers/face_layout.py (YuNet face boxes) the same
+# way: subprocess, engine .venv python with -B, PYTHONDONTWRITEBYTECODE=1,
+# HF_HUB_OFFLINE=1, PYTHONUTF8=1; nothing installed, copied or written into the
+# install. On Windows a 1.1.x install counts as absent (soumatheusgomes/editonny#7).
+# Without editonny: exit 3, only the client media in <project>/editai/broll/ enters.
+
 # Optional desktop editor (not installed by activation): Concat 0.2.7+, for
 #   bun lib/edit-engine/cli.ts concat <spec.json> --project-dir <dir under home>
 # which builds a Concat project to adjust by hand. The app must be open with its
@@ -75,7 +85,11 @@ env_vars:
 
   - name: EDITONNY_ENGINE
     required: false
-    description: "Optional. Path to the editonny engine folder (default ~/.local/share/editonny/engine) for cli.ts transcribe. Absent: supply word timings another way."
+    description: "Optional. Path to the editonny engine folder (default ~/.local/share/editonny/engine) for cli.ts transcribe, style-extract and the B-roll cards (broll-suggest, broll-render). Absent: supply word timings another way; B-roll uses the client media only."
+
+  - name: EDITAI_EDITONNY_ANY_VERSION
+    required: false
+    description: "Optional. Set to 1 to let EditAi use an editonny other than 1.0.0 on Windows (by default 1.1.x counts as absent because of soumatheusgomes/editonny#7)."
 
   - name: EDITAI_PROJECT
     required: false

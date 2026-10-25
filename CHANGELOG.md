@@ -1,5 +1,48 @@
 # Changelog
 
+## 2.1.0 (2026-10-25)
+
+B-roll automático, onda 1 da fusão com o editonny. Pedido do usuário: "Isso é muito importante, cara, dele saber criar esses B-rolls sozinho", e para a Bianca, que edita no Windows com o Codex, "pode trabalhar na fusão então" (trace `editai-onda1-broll-20261024-175913`; plano em `editai-fusao-auditoria-20261024-172940`, `PLANO-ONDAS.md` onda 1 e `BROLL.md`). Testado só no Windows 10, com o editonny 1.0.0 instalado.
+
+### novo
+
+- **`cli.ts broll-suggest <spec> [--project DIR] [--out F]`** (`lib/edit-engine/broll.ts`). Escolhe os itens de B-roll de um talking head e grava `<id>.broll.spec.json`, com o que ficou fora e por quê:
+  - **mídia do cliente** em `<projeto>/editai/broll/`, casada por palavra dita: o nome do arquivo é etiqueta, e um `broll.json` opcional (`[{"arquivo": "forno.mp4", "palavras": ["forno", "pizza"]}]`) acrescenta palavras e expressões; acento, maiúscula e plural simples não contam. Entra 0,25 s antes da palavra e dura até o fim da frase, de 1,5 a 3 s, em tela cheia (foto com aproximação lenta, vídeo mudo, whoosh baixo só com música). Mídia real vence o card no mesmo trecho;
+  - **cards do editonny 1.0.0**: monta a pasta `<projeto>/editai/broll/<id>/edit/` (`transcripts/cut.json`, `cut_timeline.json`, `edit_data.json` com gancho e CTA, `preview_marks.json` com as marcações) e chama `suggest_visuals.py`; os valores vêm da fala, e um momento sem valor lido não vira card;
+  - **rosto** por take com `face_layout.py` (olhos ao lábio, no quadro do take, cache em `<projeto>/editai/cache/broll/faces/`), ou pelas `protect_regions` do spec quando o editonny não está;
+  - **colocação** (`BROLL.md` §6.3): nada nos 3 primeiros segundos nem nos 2,5 s finais, um item a cada 6 s, até 6 itens, nunca sobre olhos e boca em qualquer zoom da câmera, sobre a headline, sobre a legenda nem sobre as faixas de cima e de baixo das plataformas do spec;
+  - sem editonny, sai com código 3 e grava o spec só com a mídia do cliente.
+- **`cli.ts broll-render <spec>`**: `render_visuals.py --format clip` para cada card, um `.mov` QuickTime Animation com alfa em `<projeto>/editai/cache/broll/<chave>/`, pela chave do modelo, dos parâmetros, da região e da duração; não refaz o que já existe. O `render` faz o mesmo sozinho quando falta um card e transforma marcações em cards.
+- **Seção `broll` no spec** (`mode` auto, manual ou off, `min_gap_s`, `hook_free_s`, `cta_free_s`, `max_items`, `items`, `marks`, `faces`, `skipped`, `render_cost`, `lang`). O `resolveSpec` transforma cada item em `MediaLayer` com `broll`, `alpha` e `provenance`, desenhada por cima da câmera (o zoom não arrasta o card) e por baixo do texto; também deriva os sons, as janelas da legenda e os ganchos. O `validate` confere a seção.
+- **Legenda e card** (`captions.windows`, escritas pelo `resolveSpec`): o card que escreve as mesmas palavras da fala esconde a legenda só enquanto está na tela; contador e preço deixam a legenda onde está, sobem a legenda para logo acima do card ou, sem lugar, também escondem. A prévia do mini editor segue as mesmas janelas.
+- **QA** (`BROLL.md` §6.4): `broll_hook_window`, `broll_face`, `broll_caption_overlap`, `broll_safe_zone`, `broll_quote` e `broll_provenance` bloqueiam; `broll_gap` avisa; `broll_items` e `broll_render_cost` informam. O QA grava a folha de contato `<id>.broll-sheet.png`, um quadro no meio de cada item.
+- **Template `talking-head-broll`** e `examples/talking-head-broll-batch.json`. O `th-batch` aceita `"template"` e `"broll_marks"` e roda o `broll-suggest` antes do render (`"broll_project"` aponta a pasta do projeto).
+- **Mini editor**: faixa B-roll na linha do tempo (5 faixas) e três comandos rápidos, em PT e EN: "tira esse b-roll", "põe um card aqui" (vira marcação que o `suggest_visuals` sempre mantém; o card sai na próxima prévia) e "b-roll mais curto". Operações novas no conjunto fechado: `broll_remove`, `broll_card`, `broll_shorten`. Corte e trim levam o B-roll junto e o mantêm fora do gancho e do CTA.
+- **`doctor`**: versão do editonny, cards de B-roll ("B-roll de cards: indisponível" sem editonny), posição do rosto e, no Windows, Modo de Desenvolvedor, `python` x `python3` e `PYTHONUTF8`, cada um com o que fazer.
+- **`lib/edit-engine/editonny.ts`**: onde está o editonny, a versão e os helpers. No Windows uma 1.1.x conta como ausente por causa de soumatheusgomes/editonny#7 (`EDITAI_EDITONNY_ANY_VERSION=1` libera). Toda chamada usa o Python da `.venv`, `-B`, `PYTHONDONTWRITEBYTECODE=1`, `HF_HUB_OFFLINE=1` e `PYTHONUTF8=1`.
+- Catálogo de ganchos: `broll_card`, `broll_full`, `broll_pip`. Agente `retention-editor` com as regras de não inventar no card (matriz 12.1).
+- README (PT e EN): "B-roll automático" e "Windows: editonny para o EditAi" (Modo de Desenvolvedor, `python`, `PYTHONUTF8=1`, versão 1.0.0 fixada e como voltar se o instalador subir para a 1.1.0).
+
+### decisões em que o código pediu outra coisa que a auditoria
+
+- **Cards desenhados e medidos, não só posicionados.** Os cards do editonny não cabem sempre na região pedida: o contador e o preço calculam o próprio tamanho pela largura. O EditAi desenha, lê o retângulo real da tinta (`ink` do `render_visuals.py --format clip`), recoloca com a altura medida e tenta cards mais estreitos antes de desistir. O QA usa a mesma tinta.
+- **`--format clip` no lugar de `--format mov`.** O clipe vem com o retângulo da tinta, que o QA de rosto e de legenda precisa.
+- **Contador e preço escondem a legenda como último recurso.** A regra da auditoria deixava a legenda e mandava o card para o centro "se o rosto deixar"; num selfie com o rosto no centro o centro nunca está livre e o card caía sempre. O card mostra o número que acabou de ser dito, e a legenda some só durante ele.
+- **Palavras fixas dos cards em PT.** O editonny 1.0.0 escreve "only", "What you *receive*:", "You do *not* need:", "Completed" e "GUARANTEE" mesmo com fala em português; com fala em PT o EditAi troca por "apenas", "Você *recebe*:", "Você *não* precisa de:", "Concluído" e "GARANTIA". Valores e itens da fala não mudam.
+- **Detectores em PT, não em PT e EN.** A matriz (2.1) diz que os detectores falam as duas línguas; o código do 1.0.0 tem em inglês só preço, porcentagem e contagem com uma lista curta de unidades. Na fala de teste em inglês ele não achou nenhum momento sozinho. Para inglês, o caminho é a marcação ("põe um card aqui").
+- **Sem `split_top` nesta onda.** O `broll_split` pede reenquadrar a pessoa na metade de baixo e a regra da costura da legenda; fica para a onda 3, com o template `split-evidence`. Mídia do cliente entra em tela cheia (`broll_full`) ou numa janela pedida (`broll_pip`).
+- **Tela cheia não passa pelo QA de rosto.** No corte para a mídia do cliente a pessoa não aparece; o `broll_face` mede cards e janelas.
+
+### alterado
+
+- `spec.ts`, `ffmpeg.ts` (B-roll depois do zoom e antes do texto), `ass.ts` (janelas da legenda, corte por tempo do evento), `qa.ts`, `cli.ts`, `th-batch.ts`, `live-ops.ts`, `quick.ts`, `live.ts`, `editor.ts` (`baseSig` com o B-roll; janelas na prévia), `doctor.ts`, `preview/index.html`, `app.css`, `editor/tracks.mjs`, `editor/model.mjs`.
+- `squad.yaml` 2.1.0: descrição do squad e das capabilities execute e live, 3 `example_briefs` novos de B-roll automático (2 PT e 1 EN; 52 → 55), critério `editai_edit_broll_qa`. Nenhuma `keyword` nova: a capability execute já está no limite de 60 do schema, e os 55 briefs voltam ao EditAi em top-1 sem elas. Workflow `retention-edit` 1.2.0; tasks `plan-retention-edit`, `audit-retention-edit`, `review-edit-preview`; workflow `live-edit`; `dependencies.yaml`; `templates/edit/README.md`; `examples/README.md`.
+
+### não mudou
+
+- Sem a seção `broll`, ou com `broll.mode: "off"`, o grafo do ffmpeg é o mesmo texto de antes. Regressões idênticas byte a byte: v2 `3a95058d…` e fumaça `b21e3618…` e `27f556fd…`; o spec da prova com `mode: "off"` também dá `3a95058d…`.
+- Briefing, estilo de referência, biblioteca, Concat e os pipelines de geração. Nenhuma mídia do editonny entrou no squad; o editonny e os outros squads não foram tocados, e nada foi gravado na instalação dele (`helpers/__pycache__` continua inexistente).
+
 ## 2.0.0 (2026-10-24)
 
 O squad passa a se chamar **EditAi**, de "edita aí" e de "Edit AI". Pedido do usuário: "EditAi o nome do squad rs" (trace `squad-rename-editai-20261024-172118`). Até a 1.8.0 ele era o `retention-video-studio`, com prefixo `rvs`. A versão sobe para 2.0.0 porque o nome, a pasta do squad, a pasta no projeto e o cache mudaram, e quem já usava precisa trocar os comandos. Testado só no Windows 10.

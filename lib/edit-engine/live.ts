@@ -139,6 +139,24 @@ export class LiveDesk {
     return { base: this.s.editor.base(), cur: this.s.editor.liveSpec(fb), fb };
   }
 
+  /** Cards the latest draft or final made from editor marks (B-roll, 2.1.0): { at, id, start, end, quote, label }. */
+  private builtCache: { key: string; cards: { at: number; id: string; start: number; end: number; quote: string; label: string }[] } | null = null;
+  builtCards() {
+    const v = [...(this.s.editor.versions ?? [])].pop();
+    if (!v) return [];
+    if (this.builtCache?.key === v.id) return this.builtCache.cards;
+    let cards: { at: number; id: string; start: number; end: number; quote: string; label: string }[] = [];
+    try {
+      const s = JSON.parse(readFileSync(join(this.s.editor.outDir, v.spec), "utf8")) as EditSpec;
+      cards = (s.broll?.marks ?? []).flatMap((m) => {
+        const it = (s.broll?.items ?? []).find((i) => i.id === m.resolved);
+        return it ? [{ at: m.at, id: it.id, start: it.start, end: it.end, quote: it.quote, label: String(it.template ?? "card").replace(/_/g, " ") }] : [];
+      });
+    } catch { cards = []; }
+    this.builtCache = { key: v.id, cards };
+    return cards;
+  }
+
   // ── page state ──────────────────────────────────────────────────────────────
 
   heartbeat(): { waiting: boolean; seen: string | null } {
@@ -176,6 +194,16 @@ export class LiveDesk {
           ...cur.camera.filter((c) => c.type === "punch_in" && c.auto).map((c) => ({ kind: "punch-auto", start: r3((c as { at: number }).at), end: r3((c as { until: number }).until), label: "punch" })),
           ...cur.audio.sfx.map((x) => ({ kind: "sfx", start: r3(x.at), end: r3(x.at + 0.3), label: x.library ?? x.hook ?? "sfx", off: !!x.only_with_music && !m })),
         ],
+        broll: cur.broll && cur.broll.mode !== "off" ? [
+          ...(cur.broll.items ?? []).map((i) => ({ id: i.id, kind: i.kind, start: r3(i.start), end: r3(i.end), quote: i.quote,
+            label: i.kind === "card" ? String(i.template ?? "card").replace(/_/g, " ") : basename(String(i.src ?? "")), ready: i.kind !== "card" || !!i.clip })),
+          ...(cur.broll.marks ?? []).filter((mk) => !mk.resolved).map((mk) => {
+            // a mark becomes a card in the render: the latest draft or final says which one
+            const b = this.builtCards().find((x) => Math.abs(x.at - mk.at) < 0.05);
+            return b ? { id: b.id, kind: "card", start: r3(b.start), end: r3(b.end), quote: b.quote, label: `${b.label} (pedido)`, ready: true }
+              : { id: "", kind: "mark", start: r3(mk.at), end: r3(mk.at + 0.3), quote: "", label: "card pedido", ready: false };
+          }),
+        ] : [],
         music: m ? { start: r3(m.start ?? 0), end: r3(cur.duration), label: (m as { library?: string }).library ?? basename(String(m.path ?? "")).replace(/\.[a-z0-9]+$/i, "") } : null,
       },
     };

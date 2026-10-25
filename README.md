@@ -8,11 +8,11 @@
 
 **EditAi** (de "edita aí" e de "Edit AI") é um estúdio de edição de retenção para vídeo curto, como squad do Nirvana-OS. Você entra com clipe, foto ou gravação de tela e sai com um MP4 9:16 (1080x1920, H.264, 30 fps) editado com ganchos de catálogo. Junto vêm o edit spec JSON que gerou o vídeo e um relatório de QA medido: áreas seguras das plataformas, tamanho e tempo de texto, -14 LUFS, codec. Ele também mantém os pipelines de geração com IA herdados do `nirvana-video-creator`, todos terminando no mesmo passe de edição. Serve para qualquer nicho: clínica, restaurante, loja, curso, imobiliária, marca pessoal.
 
-Versão 2.0.0. Protocolo de squad 6.0. Prefixo `editai`. Cerca de 25 MB. A 2.0.0 trocou o nome, a pasta do squad, a pasta no seu projeto e o cache; projetos e downloads de antes continuam funcionando (veja a entrada 2.0.0 do CHANGELOG).
+Versão 2.1.0. Protocolo de squad 6.0. Prefixo `editai`. Cerca de 25 MB. A 2.1.0 traz o B-roll automático (onda 1 da fusão com o editonny). A 2.0.0 trocou o nome, a pasta do squad, a pasta no seu projeto e o cache; projetos e downloads de antes continuam funcionando (veja a entrada 2.0.0 do CHANGELOG).
 
 ### Instalar
 
-**Requisitos.** Bun; ffmpeg e ffprobe com libass (o `doctor` confere); opcional, o [editonny](https://github.com/soumatheusgomes/editonny) **1.0.0** para a transcrição local das legendas e o medidor de estilo. No Windows, fique na 1.0.0: a 1.1.0 tem um bug lá (soumatheusgomes/editonny#7). Para editar não precisa de chave de API.
+**Requisitos.** Bun; ffmpeg e ffprobe com libass (o `doctor` confere); opcional, o [editonny](https://github.com/soumatheusgomes/editonny) **1.0.0** para a transcrição local das legendas, o medidor de estilo e os cards do B-roll automático. No Windows, fique na 1.0.0: a 1.1.0 tem um bug lá (soumatheusgomes/editonny#7); veja "Windows: editonny para o EditAi" logo abaixo. Para editar não precisa de chave de API.
 
 **Pelo GitHub** (funciona com repositório privado, porque usa o seu acesso ao GitHub):
 
@@ -40,6 +40,30 @@ bun lib/edit-engine/cli.ts library pull            # ou --music, --sfx, --only <
 Os arquivos vêm do repositório público do editonny, fixado num commit, cada um conferido pelo SHA-256, e vão para `~/.nirvana/cache/editai/`, nunca para dentro do squad. Sem internet ou sem o `pull`, tudo funciona com o kit.
 
 **No Codex.** O squads.sh marca o Nirvana no Codex como suporte parcial, e este squad só foi testado no Claude Code. O que não depende do runtime funciona igual, porque é Bun com ffmpeg rodando no terminal: `doctor`, `brief`, `render`, `qa`, `th-batch`, `style-extract`, `style-apply`, `preview` (o mini editor abre no navegador) e `library pull`. O briefing guiado sai como lista numerada, que você responde com `--answers "1=2, 2=1"`; as perguntas clicáveis (`AskUserQuestion`) existem só no Claude Code. No chat do Codex, peça pelo Nirvana como de costume ("via nirvana, edita esse vídeo da clínica pro Reels"). Se o pedido não chegar ao squad, peça direto: "leia `~/squads/editai/agents/edit-briefing-guide.md` e siga". Não foram testados no Codex: o despacho pelo harness do Nirvana, o limite de turnos por agente e os pipelines de geração com IA.
+
+### Windows: editonny para o EditAi
+
+O EditAi chama o editonny instalado para três coisas: a transcrição das legendas, o medidor de estilo e os cards do B-roll. No Windows são cinco cuidados, e o `doctor` confere cada um e diz o que fazer.
+
+1. **Modo de Desenvolvedor ligado.** O instalador do editonny registra o skill com links simbólicos em `~/.claude/skills/editonny` (Claude Code) e `~/.agents/skills/editonny` (Codex). Sem administrador, o Windows só deixa criar esses links com o modo ligado: Configurações > Privacidade e segurança > Para desenvolvedores > Modo de Desenvolvedor. Feche e abra o terminal depois.
+2. **`python`, não `python3`.** Os comandos do editonny usam `python3`, e no Windows esse nome costuma ser o atalho da Microsoft Store. Troque por `python`: `python ~/.local/share/editonny/scripts/editonny.py doctor`. O EditAi não depende disso, porque chama o Python da `.venv` do editonny.
+3. **`PYTHONUTF8=1`.** Sem ele, o Python do Windows lê e grava arquivos na página de código do sistema e quebra os acentos do PT-BR. Rode `setx PYTHONUTF8 1` uma vez e abra outro terminal. As chamadas do EditAi já ligam a variável sozinhas; ela vale para o que você rodar do editonny à mão.
+4. **Versão 1.0.0, fixa.** A 1.1.0 tem um bug no Windows (soumatheusgomes/editonny#7). O pedido de instalação do README do editonny clona "a versão mais recente"; no Windows, peça com todas as letras: "instale o editonny na versão 1.0.0, não a mais recente". Enquanto a issue estiver aberta, o EditAi trata uma 1.1.x no Windows como editonny ausente: sem cards, só a mídia do cliente, e o `doctor` avisa. Para testar outra versão por sua conta, defina `EDITAI_EDITONNY_ANY_VERSION=1`.
+5. **Se o instalador subir para a 1.1.0.** Ele guarda a cópia anterior inteira (com a `.venv`) em `~/.local/share/editonny-backups/<data-hora>/`. Para voltar, no PowerShell:
+
+   ```powershell
+   $s = "$HOME\.local\share"
+   Get-Content "$s\editonny\VERSION"                      # mostra 1.1.0
+   Get-ChildItem "$s\editonny-backups" | ForEach-Object { "$($_.Name)  $(Get-Content "$($_.FullName)\VERSION")" }
+   Rename-Item "$s\editonny" "editonny-1.1.0"              # guarda a nova, não apaga
+   Move-Item "$s\editonny-backups\<data-hora da 1.0.0>" "$s\editonny"
+   uv sync --locked --directory "$s\editonny\engine"       # com a .venv junto, termina sem baixar nada
+   bun ~/squads/editai/lib/edit-engine/cli.ts doctor        # "editonny 1.0.0"
+   ```
+
+   Os links em `~/.claude/skills` e `~/.agents/skills` apontam para `~/.local/share/editonny` e continuam valendo. Sem backup, clone o repositório do editonny, faça checkout do commit da 1.0.0 e rode `python install.py`.
+
+No Codex os comandos do EditAi são os mesmos: Bun e ffmpeg no terminal.
 
 ### Primeiro uso em 3 passos
 
@@ -73,7 +97,7 @@ Rode de qualquer pasta: o motor fica em `~/squads/editai/lib/edit-engine/cli.ts`
 | `video.retention_edit.guided` | vídeo + o que a pessoa disse (texto, áudio, cliques) + cliente | perguntas que faltam → plano → vídeo com QA; perfil do cliente salvo no projeto |
 | `video.reference_style.extract` | vídeo de referência (arquivo, TikTok, YouTube; Instagram com token da Apify) | perfil de estilo JSON no projeto, relatório do que não reproduz, vídeo com o estilo aplicado |
 | `video.retention_edit.execute` | material + texto ou roteiro | MP4 editado + `.spec.json` + `.png` + `.qa.md` |
-| `video.retention_edit.live` | spec + MP4 renderizado + o seu agente (Claude Code ou Codex) | editor com IA: pedidos escritos, comandos rápidos, 4 faixas, prévia a cada pedido, final com QA |
+| `video.retention_edit.live` | spec + MP4 renderizado + o seu agente (Claude Code ou Codex) | editor com IA: pedidos escritos, comandos rápidos, 5 faixas, prévia a cada pedido, final com QA |
 | `video.retention_edit.review` | spec + MP4 renderizado | mini editor no navegador → prévia rápida → final com QA em Downloads (ou `feedback.json` → próxima versão + QA) |
 | `video.text_hook_batch.execute` | lista de ganchos + foto ou clipe por item | um MP4 só com texto por gancho + `batch-report.md` |
 | `video.video_creation_pipeline.execute` | brief | geração com IA → master → passe de retenção |
@@ -81,7 +105,7 @@ Rode de qualquer pasta: o motor fica em `~/squads/editai/lib/edit-engine/cli.ts`
 | `video.lipsync_refinement.execute` | footage + áudio | lipsync → legenda palavra a palavra |
 | `media.video.compose` | brief + imagem | um clipe → passe de retenção |
 
-Quatro templates de edição, cada um provado com material real e com exemplo em `examples/`: só texto, POV com tela do app, isto VS aquilo em tela dividida e rosto falando com legenda.
+Cinco templates de edição, cada um provado com material real e com exemplo em `examples/`: só texto, POV com tela do app, isto VS aquilo em tela dividida, rosto falando com legenda e, desde a 2.1.0, rosto falando com legenda e B-roll automático (`talking-head-broll`).
 
 **Sistemas testados: só Windows 10** (ffmpeg 8.1.1, Bun 1.4.2). O código não tem nada específico de Windows, mas macOS e Linux não foram testados. As chaves em `dependencies.yaml` servem só aos pipelines de geração com IA, e todas são opcionais. Opcional também: o Concat 0.2.7 ou mais novo, para abrir um vídeo como projeto e ajustar à mão.
 
@@ -102,7 +126,32 @@ bun lib/edit-engine/cli.ts edit-op vs.spec.json op.json               # o agente
 bun lib/edit-engine/cli.ts agent-reply vs.spec.json p3 --status feito --message "Zoom em 00:03.6"
 ```
 
-Outros: `library` (lista músicas e efeitos e marca o que é kit e o que falta baixar), `library pull`, `placeholder-screen`, `concat`, `transcribe`, `validate`, `sfx-synth`, `profiles`, `style-extract`, `style-check`. A lista completa está no topo de `lib/edit-engine/cli.ts`.
+Outros: `broll-suggest` e `broll-render` (B-roll automático, abaixo), `library` (lista músicas e efeitos e marca o que é kit e o que falta baixar), `library pull`, `placeholder-screen`, `concat`, `transcribe`, `validate`, `sfx-synth`, `profiles`, `style-extract`, `style-check`. A lista completa está no topo de `lib/edit-engine/cli.ts`.
+
+### B-roll automático
+
+Num talking head, o EditAi põe B-roll sozinho: a foto ou o vídeo que o cliente mandou, na hora em que a coisa é citada, e cards animados quando a fala diz um número, um preço, uma lista, passos, uma oferta, uma virada ou um convite a comentar.
+
+1. Ponha as fotos e vídeos do cliente em `<projeto>/editai/broll/`. O nome do arquivo já é etiqueta (`forno-a-lenha.mp4` casa com "forno"). Para outras palavras, um `broll.json` opcional na mesma pasta: `[{"arquivo": "forno.mp4", "palavras": ["forno", "pizza"]}]`. Acento e maiúscula não contam.
+2. Use o template `talking-head-broll`, ou `"template": "talking-head-broll"` no lote do `th-batch` (que já roda o passo 3; veja `examples/talking-head-broll-batch.json`), ou acrescente `"broll": {"mode": "auto", "items": []}` a um spec.
+3. Rode:
+
+   ```bash
+   bun lib/edit-engine/cli.ts broll-suggest video.plan.spec.json --project <pasta do projeto>   # grava video.broll.spec.json e lista o que entrou e o que ficou fora, com o motivo
+   bun lib/edit-engine/cli.ts broll-render video.broll.spec.json                             # desenha os cards no cache do projeto (o render também faz)
+   bun lib/edit-engine/cli.ts render video.broll.spec.json video.mp4
+   bun lib/edit-engine/cli.ts qa video.spec.json video.mp4                                    # checks broll_* e a folha de contato video.broll-sheet.png
+   ```
+
+**Regras.** Nada nos 3 primeiros segundos nem nos 2,5 s finais. No máximo um item a cada 6 s, o que dá de 4 a 6 num vídeo de 45 a 60 s. Mídia real do cliente vence o card no mesmo trecho. Nunca sobre olhos e boca (medidos pelo `face_layout.py` do editonny, ou pelas `protect_regions` do spec), a headline, a legenda ou a interface das plataformas. O valor do card sai da fala: se o detector não leu o valor, o card não entra. Card que escreve as mesmas palavras da fala esconde a legenda só enquanto está na tela; contador e preço deixam a legenda, sobem ela para cima do card ou, se não houver lugar, também escondem. Um som por card, da biblioteca CC0. O QA bloqueia em `broll_hook_window`, `broll_face`, `broll_caption_overlap`, `broll_safe_zone`, `broll_quote` e `broll_provenance`.
+
+**No mini editor**, a linha do tempo ganha a faixa B-roll e três comandos rápidos: "tira esse b-roll", "põe um card aqui" (vira um ponto marcado, que o editonny transforma em card com a frase dita ali na próxima prévia) e "b-roll mais curto".
+
+**O que vem do editonny 1.0.0**, por subprocesso e sem copiar nada: achar os momentos (`suggest_visuals.py`), desenhar os cards (`render_visuals.py`, `.mov` com transparência no cache `<projeto>/editai/cache/broll/`) e medir o rosto (`face_layout.py`). **O resto é do EditAi:** spec, render, QA, regras, mídia do cliente, mini editor, template e catálogo de ganchos.
+
+**Sem editonny**, ou com a 1.1.x no Windows, o `broll-suggest` sai com código 3, só a mídia da pasta entra e o vídeo renderiza com os ganchos de sempre; o `doctor` mostra "B-roll de cards: indisponível". Sem a pasta de mídia, só cards. Com `"mode": "off"`, o render é o mesmo de antes, byte a byte.
+
+**Limites conhecidos.** Os detectores do editonny 1.0.0 foram escritos para português: em inglês eles quase não acham momentos sozinhos (na fala de teste não acharam nenhum), então peça "põe um card aqui" onde quiser um card. Alguns rótulos fixos dos cards vêm em inglês do editonny ("only", "What you receive"); com fala em português o EditAi troca por "apenas" e "Você recebe". Num selfie com o rosto no centro, uma lista longa pode não caber entre o rosto e a borda de baixo da tela; ela fica fora, com o motivo no relatório.
 
 ### Música e efeitos sonoros
 
@@ -141,7 +190,7 @@ A página escuta só em 127.0.0.1, exige token por sessão em toda gravação (o
 
 ### Editor com IA: como ligar o seu agente
 
-Na aba **Editor** tem uma caixa **Você pede** ao lado do vídeo e, embaixo, a linha do tempo em 4 faixas: **Vídeo** (miniaturas e takes), **Legenda** (blocos; clicar leva o cursor até ali), **Edição** (headline, zooms, punch-ins, efeitos) e **Áudio** (onda e barra da música). Arraste a régua para correr o vídeo e arraste numa faixa para selecionar um trecho. O pedido vai junto com o tempo do cursor e a seleção.
+Na aba **Editor** tem uma caixa **Você pede** ao lado do vídeo e, embaixo, a linha do tempo em 5 faixas: **Vídeo** (miniaturas e takes), **Legenda** (blocos; clicar leva o cursor até ali), **Edição** (headline, zooms, punch-ins, efeitos), **B-roll** (cards e mídia do cliente, desde a 2.1.0) e **Áudio** (onda e barra da música). Arraste a régua para correr o vídeo e arraste numa faixa para selecionar um trecho. O pedido vai junto com o tempo do cursor e a seleção.
 
 Os **comandos rápidos** saem na hora, feitos pelo próprio motor, sem IA: "tira essa pausa" (com o cursor no silêncio; com seleção, todas as pausas dela), "corta esse trecho", "legenda maior" ou "menor", "sobe a legenda", "headline maior", "legenda clássica" ou "bold", "headline fixa" ou "só no começo", "troca X por Y", "destaca X", "música mais alta", "mais baixa", "sem música", "tira o whoosh", "zoom aqui" e "desfaz". Valem em português ou inglês, com ou sem acento. A lista completa está no botão "O que eu posso pedir?". Cada pedido gera a prévia rápida sozinho e aparece em **A IA edita** com o status (na fila, aplicando, feito, precisa de você, não deu), a resposta curta e um **Desfazer** só dele.
 
@@ -211,11 +260,11 @@ Live streaming, avatar em tempo real, escrever os ganchos (isso fica com um squa
 
 **EditAi** (from the Portuguese "edita aí", roughly "go ahead, edit it", and from "Edit AI") is a retention-editing studio for short-form video, packaged as a Nirvana-OS squad. Give it a clip, a photo or a screen recording and it returns a 9:16 MP4 (1080x1920, H.264, 30 fps) edited with catalogued hooks. With it come the JSON edit spec that produced the video and a measured QA report: platform safe zones, text size and dwell time, -14 LUFS, codec. It also keeps the AI generation pipelines inherited from `nirvana-video-creator`, all ending in the same edit pass. It fits any niche: clinic, restaurant, shop, course, real estate, personal brand.
 
-Version 2.0.0. Squad protocol 6.0. Prefix `editai`. About 25 MB. Version 2.0.0 changed the name, the squad folder, the folder in your project and the cache; projects and downloads from before keep working (see the 2.0.0 entry in the CHANGELOG).
+Version 2.1.0. Squad protocol 6.0. Prefix `editai`. About 25 MB. Version 2.1.0 adds automatic B-roll (wave 1 of the editonny fusion). Version 2.0.0 changed the name, the squad folder, the folder in your project and the cache; projects and downloads from before keep working (see the 2.0.0 entry in the CHANGELOG).
 
 ### Install
 
-**Requirements.** Bun; ffmpeg and ffprobe with libass (`doctor` checks); optionally [editonny](https://github.com/soumatheusgomes/editonny) **1.0.0** for local caption timings and the style meter. On Windows stay on 1.0.0: 1.1.0 has a bug there (soumatheusgomes/editonny#7). Editing needs no API key.
+**Requirements.** Bun; ffmpeg and ffprobe with libass (`doctor` checks); optionally [editonny](https://github.com/soumatheusgomes/editonny) **1.0.0** for local caption timings, the style meter and the automatic B-roll cards. On Windows stay on 1.0.0: 1.1.0 has a bug there (soumatheusgomes/editonny#7); see "Windows: editonny for EditAi" below. Editing needs no API key.
 
 **From GitHub** (works with a private repository, since it uses your own GitHub access):
 
@@ -238,6 +287,16 @@ With a public repository, `squads add avantis-agency/editai -y` does the same. T
 
 **On Codex.** squads.sh lists Nirvana on Codex as partial support, and this squad was tested on Claude Code only. What does not depend on the runtime works the same, because it is Bun plus ffmpeg in a terminal: `doctor`, `brief`, `render`, `qa`, `th-batch`, `style-extract`, `style-apply`, `preview` (the mini editor opens in the browser) and `library pull`. The guided briefing comes as a numbered list you answer with `--answers "1=2, 2=1"`; clickable questions (`AskUserQuestion`) exist only on Claude Code. In the Codex chat, ask through Nirvana as usual; if the request does not reach the squad, ask directly: "read `~/squads/editai/agents/edit-briefing-guide.md` and follow it". Not tested on Codex: dispatch through the Nirvana harness, per-agent turn limits and the AI generation pipelines.
 
+### Windows: editonny for EditAi
+
+EditAi calls the installed editonny for caption timings, the style meter and the B-roll cards. On Windows there are five points, and `doctor` checks each one and says what to do.
+
+1. **Developer Mode on.** editonny's installer registers the skill with symbolic links in `~/.claude/skills/editonny` (Claude Code) and `~/.agents/skills/editonny` (Codex); without an admin shell, Windows only allows them with Developer Mode on (Settings > Privacy & security > For developers). Reopen the terminal afterwards.
+2. **`python`, not `python3`.** editonny's commands say `python3`, which on Windows is usually the Microsoft Store shortcut. Use `python ~/.local/share/editonny/scripts/editonny.py doctor`. EditAi itself calls the Python of editonny's `.venv`.
+3. **`PYTHONUTF8=1`.** Without it Windows Python reads and writes files in the system code page and breaks Portuguese accents. Run `setx PYTHONUTF8 1` once and open a new terminal. EditAi's own calls already set it.
+4. **Pinned to 1.0.0.** 1.1.0 has a Windows bug (soumatheusgomes/editonny#7). editonny's install request clones "the latest version"; on Windows ask for 1.0.0 explicitly. While the issue is open EditAi treats a 1.1.x install on Windows as missing (no cards, client media only) and `doctor` says so. `EDITAI_EDITONNY_ANY_VERSION=1` lets you try another version at your own risk.
+5. **If the installer moved you to 1.1.0.** It keeps the previous copy, `.venv` included, in `~/.local/share/editonny-backups/<date-time>/`. Rename the current `~/.local/share/editonny` (do not delete it), move the 1.0.0 backup back to `~/.local/share/editonny`, run `uv sync --locked --directory ~/.local/share/editonny/engine` and check with `doctor`; the PowerShell lines are in the Portuguese section. The skill links point to `~/.local/share/editonny` and keep working. Without a backup, clone editonny, check out the 1.0.0 commit and run `python install.py`.
+
 ### First use in 3 steps
 
 Run from any folder: the engine is `~/squads/editai/lib/edit-engine/cli.ts`.
@@ -248,9 +307,17 @@ Run from any folder: the engine is `~/squads/editai/lib/edit-engine/cli.ts`.
 
 ### What it delivers
 
-The nine capabilities are in the table above. There are four edit templates, each proven on real material with an example in `examples/`: text only, POV with an app screen, this-vs-that split screen, and talking head with captions. **Tested on Windows 10 only** (ffmpeg 8.1.1, Bun 1.4.2); nothing in the code is Windows-specific, but macOS and Linux are untested.
+The nine capabilities are in the table above. There are five edit templates, each proven on real material with an example in `examples/`: text only, POV with an app screen, this-vs-that split screen, talking head with captions and, since 2.1.0, talking head with captions and automatic B-roll (`talking-head-broll`). **Tested on Windows 10 only** (ffmpeg 8.1.1, Bun 1.4.2); nothing in the code is Windows-specific, but macOS and Linux are untested.
 
-Main commands: `doctor`, `from-template` → `render` → `qa`, `th-batch examples/talking-head-batch.json` (`EDITAI_MEDIA` and `EDITAI_OUT` set), `batch my-batch.json` for text-only hooks, `preview <spec> --open [--final-name "Name"] [--downloads DIR]`, `apply-feedback <spec> <feedback>`, and for the AI editor `agent-inbox <spec> [--wait]`, `edit-op <spec> <op.json>`, `agent-reply <spec> <id> --status ... --message ...`. Also `library`, `library pull`, `placeholder-screen`, `concat`, `transcribe`, `validate`, `sfx-synth`, `profiles`, `style-extract`, `style-check`.
+Main commands: `doctor`, `from-template` → `render` → `qa`, `broll-suggest` → `broll-render` for automatic B-roll, `th-batch examples/talking-head-batch.json` (`EDITAI_MEDIA` and `EDITAI_OUT` set), `batch my-batch.json` for text-only hooks, `preview <spec> --open [--final-name "Name"] [--downloads DIR]`, `apply-feedback <spec> <feedback>`, and for the AI editor `agent-inbox <spec> [--wait]`, `edit-op <spec> <op.json>`, `agent-reply <spec> <id> --status ... --message ...`. Also `library`, `library pull`, `placeholder-screen`, `concat`, `transcribe`, `validate`, `sfx-synth`, `profiles`, `style-extract`, `style-check`.
+
+### Automatic B-roll
+
+On a talking head EditAi adds B-roll by itself: the client's own photo or video when the speech names it, and animated cards when the speech says a number, a price, a list, steps, an offer, a turn or an invitation to comment. Put the client's files in `<project>/editai/broll/` (the file name is the tag; an optional `broll.json` adds words: `[{"arquivo": "forno.mp4", "palavras": ["forno", "pizza"]}]`), use the `talking-head-broll` template (or `"template": "talking-head-broll"` in a `th-batch` file, see `examples/talking-head-broll-batch.json`), then `cli.ts broll-suggest <spec> --project <dir>`, `cli.ts broll-render <spec>`, `render` and `qa` (`broll_*` checks and a contact sheet).
+
+Rules: nothing in the first 3 s or the last 2.5 s; at most one item every 6 s (4 to 6 in a 45 to 60 s video); real client media beats a card on the same stretch; never over eyes and mouth (editonny's `face_layout.py`, or the spec's `protect_regions`), the headline, the captions or the platform UI; a card's value comes from the speech or the card is dropped; a card that writes the spoken words hides the caption only while it is on screen. Blocking QA: `broll_hook_window`, `broll_face`, `broll_caption_overlap`, `broll_safe_zone`, `broll_quote`, `broll_provenance`. The mini editor gets a B-roll track and three quick commands: "tira esse b-roll", "põe um card aqui", "b-roll mais curto" (English forms work too).
+
+From editonny 1.0.0, by subprocess and nothing copied: moment detection (`suggest_visuals.py`), card drawing (`render_visuals.py`, alpha `.mov` cached in `<project>/editai/cache/broll/`) and face position (`face_layout.py`). Without editonny, or with 1.1.x on Windows, `broll-suggest` exits 3, only the client media enters and the video still renders; with `"mode": "off"` the render is the one from before, byte for byte. Known limits: editonny 1.0.0's detectors are written for Portuguese and find almost nothing in English speech on their own (use "põe um card aqui"); a few fixed card words come from editonny in English and are switched to Portuguese for Portuguese speech; on a centred selfie a long list may not fit under the face and stays out with the reason in the report.
 
 ### Music and sound effects
 
@@ -262,7 +329,7 @@ The Editor tab plays a clean base of the video (no burned text) and the page dra
 
 ### AI editor: connect your agent
 
-The Editor tab has a **Você pede** box next to the video and a four-track timeline below it: **Vídeo** (thumbnails and takes), **Legenda** (caption blocks; a click moves the cursor there), **Edição** (headline, zooms, punch-ins, sound effects) and **Áudio** (waveform and the music bar). Drag the ruler to scrub and drag on a track to select a stretch; each request carries the cursor time and the selection.
+The Editor tab has a **Você pede** box next to the video and a five-track timeline below it: **Vídeo** (thumbnails and takes), **Legenda** (caption blocks; a click moves the cursor there), **Edição** (headline, zooms, punch-ins, sound effects), **B-roll** (cards and client media, since 2.1.0) and **Áudio** (waveform and the music bar). Drag the ruler to scrub and drag on a track to select a stretch; each request carries the cursor time and the selection.
 
 Quick commands are applied by the engine at once, without AI: "tira essa pausa" / "remove this pause", "corta esse trecho", caption or headline bigger and smaller, caption up or down, classic or bold captions, headline fixed or only at the start, "troca X por Y", "destaca X", music louder, lower, off or on, whoosh off or on, "zoom aqui" and "desfaz". The full list is behind "O que eu posso pedir?". Each request renders a quick draft and shows in **A IA edita** with its status (queued, applying, done, needs you, failed), a short answer and its own undo.
 

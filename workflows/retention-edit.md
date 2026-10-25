@@ -1,7 +1,7 @@
 ---
 name: retention-edit
 description: "Existing material to a retention-edited 9:16 MP4: template and hooks into an edit spec, ffmpeg render, measured edit QA, and an optional human review in a local browser preview with apply-feedback."
-version: 1.1.0
+version: 1.2.0
 steps:
   - id: plan
     agent: retention-editor
@@ -58,7 +58,7 @@ on_failure: abort
 
 ## plan
 
-Read the brief, the material and the text source. Choose the template whose format matches the material: a photo plus a written hook is `text-only`; a person plus an app recording is `pov-app-screen`; two sides of a comparison is `this-vs-that`; a speaker with word timings is `talking-head-captions`. Fill the slots, inspect a gridded frame to declare eyes and mouth, and hand a spec that `cli.ts validate` accepts.
+Read the brief, the material and the text source. Choose the template whose format matches the material: a photo plus a written hook is `text-only`; a person plus an app recording is `pov-app-screen`; two sides of a comparison is `this-vs-that`; a speaker with word timings is `talking-head-captions`. Fill the slots, inspect a gridded frame to declare eyes and mouth, and hand a spec that `cli.ts validate` accepts. A talking head that should get B-roll by itself uses `talking-head-broll`: `cli.ts broll-suggest` matches the client media in `<project>/editai/broll/` to spoken words and asks the installed editonny 1.0.0 for cards, then `cli.ts broll-render` draws them (without editonny, exit 3 and client media only).
 
 ## render
 

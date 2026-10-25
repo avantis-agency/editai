@@ -4,7 +4,7 @@
   "slug": "editai",
   "contract_version": "1.0.0",
   "surface_hash": "d7d8a7f1e4997e1e",
-  "prose_hash": "8b845f9a8739e563",
+  "prose_hash": "9ca13fa369a61911",
   "entries": {
     "agent:agents/VEO_VIDEO.md": {
       "type": "agent",
@@ -36,7 +36,7 @@
     },
     "agent:agents/retention-editor.md": {
       "type": "agent",
-      "hash": "df191171b48d83e8"
+      "hash": "0f4d2c9ac984fd74"
     },
     "agent:agents/shot-stitcher.md": {
       "type": "agent",
@@ -129,7 +129,7 @@
         "produces:reels-mp4",
         "produces:retention-edit-mp4"
       ],
-      "hash": "c7b6c6fe93fa0418"
+      "hash": "0765d2274a0c94e6"
     },
     "capability:video.retention_edit.guided": {
       "type": "capability",
@@ -218,7 +218,7 @@
     },
     "task:tasks/audit-retention-edit.md": {
       "type": "task",
-      "hash": "d8754c104df0cae2"
+      "hash": "f2cd749f79d7f576"
     },
     "task:tasks/audit-video-quality.md": {
       "type": "task",
@@ -254,7 +254,7 @@
     },
     "task:tasks/plan-retention-edit.md": {
       "type": "task",
-      "hash": "efd1d04a6de53d4a"
+      "hash": "d78973263daa6b7d"
     },
     "task:tasks/plan-text-hook-batch.md": {
       "type": "task",
@@ -266,7 +266,7 @@
     },
     "task:tasks/review-edit-preview.md": {
       "type": "task",
-      "hash": "0d68f270f56d671c"
+      "hash": "5710ba2d4f942d6b"
     },
     "task:tasks/route-video-tool.md": {
       "type": "task",
@@ -306,7 +306,7 @@
     },
     "workflow:workflows/live-edit": {
       "type": "workflow",
-      "hash": "1ba3f8f0aecaba6a"
+      "hash": "013fe2b6a7b99508"
     },
     "workflow:workflows/long-form-multi-shot": {
       "type": "workflow",
@@ -318,7 +318,7 @@
     },
     "workflow:workflows/retention-edit": {
       "type": "workflow",
-      "hash": "61e94b0735d4af0c"
+      "hash": "ed46df2b7a55f565"
     },
     "workflow:workflows/retention-review": {
       "type": "workflow",

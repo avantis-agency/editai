@@ -34,7 +34,7 @@ Every `<id>.mp4` with its `<id>.spec.json` in the run directory.
 
 ## Steps
 1. `bun lib/edit-engine/cli.ts qa <id>.spec.json <id>.mp4 <run-dir>` per video (skip if the batch already wrote `<id>.qa.json` for this exact MP4).
-2. Open each PNG and add the judged lines (triple alignment, eyes and mouth, pacing) to `<id>.qa.md`.
+2. Open each PNG and add the judged lines (triple alignment, eyes and mouth, pacing) to `<id>.qa.md`. With B-roll, open `<id>.broll-sheet.png` too (one frame per item) and judge whether each card says what the person said at that second.
 3. For each FAIL, write the spec field, the new value and the measured reason.
 4. Write `edit-qa-summary.md` with one line per video and the overall verdict.
 

@@ -4,6 +4,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { pickSfx, pickTrack, synthAnchor } from "./library.ts";
+import { resolveBroll, validateBroll, type BrollSpec } from "./broll.ts";
 
 export type Platform = "instagram_reels" | "tiktok" | "youtube_shorts" | "facebook_reels";
 export type Animation = "none" | "fade" | "pop_in" | "slide_up" | "line_stagger" | "word_reveal";
@@ -27,6 +28,11 @@ export interface MediaLayer {
   audio?: boolean;        // keep this layer's own audio (talking head)
   framing?: string;       // shot label ("selfie-medium", "wide", "screen"): a dissolve is only legal between different framings
   transition_in?: { type: "cut" | "dissolve"; duration?: number };  // how this layer enters over the previous one (default cut)
+  // B-roll (2.1.0): written by resolveSpec from spec.broll, never by hand. A layer with `broll` is drawn above the
+  // camera (not zoomed) and under the text; `alpha` = a card clip with transparency (QuickTime Animation, overlay format=auto).
+  broll?: string;         // the broll item id it comes from
+  alpha?: boolean;
+  provenance?: Record<string, unknown>;
 }
 
 /**
@@ -97,6 +103,8 @@ export interface Captions {
   pop_scale?: number;      // bold-word: % the spoken word grows to (default 114)
   max_width_px?: number;   // bold-word: widest a group may be (default 860 at 1080 wide)
   group_font_px?: number[]; // written by the render fit (one per caption group); do not hand-edit
+  /** written by resolveSpec from spec.broll: a caption group that overlaps a window moves to `y` or hides; do not hand-edit */
+  windows?: { start: number; end: number; y?: number; hide?: boolean; broll?: string }[];
 }
 
 /**
@@ -104,7 +112,7 @@ export interface Captions {
  * src: a path, or "@sfx:<role|category|id>" from assets/sfx/index.json (resolved by resolveSpec; `library` keeps the id).
  * anchor: true = `at` is the second of the audible impact; the file starts anchor_s earlier (written by resolveSpec).
  */
-export interface Sfx { src: string; at: number; gain_db?: number; hook?: string; only_with_music?: boolean; anchor?: boolean; anchor_s?: number; library?: string }
+export interface Sfx { src: string; at: number; gain_db?: number; hook?: string; only_with_music?: boolean; anchor?: boolean; anchor_s?: number; library?: string; broll?: string }
 
 /**
  * Background music under the voice. `path` (or the legacy `src`) is the track;
@@ -137,7 +145,7 @@ export interface AudioSpec {
   voice_cleanup?: { highpass_hz?: number };  // high-pass on each layer's own audio before the mix (removes room rumble)
 }
 
-export interface HookApplied { hook: string; at: number; why: string }
+export interface HookApplied { hook: string; at: number; why: string; broll?: string }
 
 export interface EditSpec {
   spec_version: 1;
@@ -160,6 +168,8 @@ export interface EditSpec {
   frame_at?: number;
   output: { crf: number; preset: string };
   notes?: string[];
+  /** Automatic B-roll (2.1.0, lib/edit-engine/broll.ts). Absent or mode "off": the render is the same as before. */
+  broll?: BrollSpec;
 }
 
 export class SpecError extends Error {}
@@ -218,6 +228,7 @@ export function validateSpec(s: EditSpec): string[] {
   if (s.captions?.preset && !["classic", "bold-word"].includes(s.captions.preset)) p.push("captions.preset must be classic or bold-word");
   if (!s.hooks_applied?.length) p.push("hooks_applied is empty: name the catalog hooks this spec uses");
   if (!s.alignment?.text || !s.alignment?.visual || !s.alignment?.audio) p.push("alignment needs text, visual and audio");
+  p.push(...validateBroll(s));
   return p;
 }
 
@@ -225,7 +236,7 @@ export const musicPath = (m?: MusicSpec | null) => (m ? (m.path ?? m.src ?? null
 
 /** Full-frame video layers in timeline order: the takes of a talking head. */
 export function takes(s: EditSpec): MediaLayer[] {
-  return (s.layers ?? []).filter((l) => l.kind === "video" && !l.rect).sort((a, b) => a.start - b.start);
+  return (s.layers ?? []).filter((l) => l.kind === "video" && !l.rect && !l.broll).sort((a, b) => a.start - b.start);
 }
 
 /** True when `b` starts where `a` ends (within half a frame). */
@@ -248,9 +259,11 @@ export function ghostDissolves(s: EditSpec): string[] {
  * Normalises a spec in place; idempotent, safe to call before every validate,
  * render and QA. Music given as a bare path becomes {path}; music without a path
  * is dropped. A `fixed` headline spans the whole video. transitions.punch_alternate
- * regenerates its punch-ins (every other take, switched on the cut frame).
+ * regenerates its punch-ins (every other take, switched on the cut frame). spec.broll becomes its layers,
+ * sounds, caption windows and hooks (broll.ts resolveBroll; nothing when it is absent or "off").
  */
 export function resolveSpec(s: EditSpec): EditSpec {
+  resolveBroll(s);
   const a = s.audio as AudioSpec | undefined;
   if (a) {
     if (typeof a.music === "string") a.music = { path: a.music };

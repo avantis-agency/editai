@@ -1,0 +1,351 @@
+{
+  "id": "talking-head-broll",
+  "name": "Rosto falando com legenda e B-roll automático",
+  "summary": "The talking-head-captions edit (fixed headline, bold-word captions, J-cut takes, music ducked under the voice, -14 LUFS) with automatic B-roll switched on: cli.ts broll-suggest fills broll.items from the speech (the person's own media in <project>/editai/broll/ matched by a spoken word, then the installed editonny 1.0.0 cards for prices, counts, lists, steps, offers, turns and comment invitations), cli.ts broll-render draws the cards, and the render puts them above the camera and under the text. Nothing in the first 3 s or the last 2.5 s, at most one item every 6 s, never over eyes and mouth, the headline or the captions. Values come from the speech, never from a template example. Without editonny only the client media enters.",
+  "slots": {
+    "id": {
+      "type": "string",
+      "required": true
+    },
+    "video": {
+      "type": "media-path",
+      "required": true,
+      "description": "talking-head clip with audio"
+    },
+    "video_in": {
+      "type": "seconds",
+      "default": 0
+    },
+    "words": {
+      "type": "{word,start,end,emphasis?}[]",
+      "required": true,
+      "description": "word timestamps relative to video_in (cli.ts transcribe, Whisper or similar); emphasis: true paints a keyword"
+    },
+    "hook_lines": {
+      "type": "string[]",
+      "required": true
+    },
+    "duration": {
+      "type": "seconds",
+      "required": true
+    },
+    "headline_mode": {
+      "type": "fixed|intro",
+      "default": "fixed",
+      "description": "fixed = whole video; intro = 0 to hook_end (the 1.0 behaviour)"
+    },
+    "hook_end": {
+      "type": "seconds",
+      "default": 3,
+      "description": "end of the headline in intro mode (Kallaway: the text hook stays about 3 s)"
+    },
+    "punch_at": {
+      "type": "seconds",
+      "default": 3.5
+    },
+    "punch_until": {
+      "type": "seconds",
+      "default": 7
+    },
+    "text_y": {
+      "type": "px",
+      "default": 350
+    },
+    "caption_y": {
+      "type": "px",
+      "default": 1330
+    },
+    "font_px": {
+      "type": "px",
+      "default": 86,
+      "description": "headline em size at 1080x1920 (CSS-like px; libass gets about 149 for Anton)"
+    },
+    "headline_line_px": {
+      "type": "px",
+      "default": 92,
+      "description": "distance between headline line centres (about 1.07 em)"
+    },
+    "headline_max_width": {
+      "type": "px",
+      "default": 820
+    },
+    "caption_preset": {
+      "type": "bold-word|classic",
+      "default": "bold-word"
+    },
+    "caption_font_px": {
+      "type": "px",
+      "default": 72,
+      "description": "caption em size (CSS-like px)"
+    },
+    "platforms": {
+      "type": "platform[]",
+      "default": [
+        "instagram_reels",
+        "tiktok"
+      ]
+    },
+    "protect_regions": {
+      "type": "rect[]",
+      "default": []
+    },
+    "focus": {
+      "type": "point",
+      "default": {
+        "x": 0.5,
+        "y": 0.4
+      }
+    },
+    "visual_note": {
+      "type": "string",
+      "required": true
+    },
+    "alignment_text": {
+      "type": "string",
+      "required": true
+    },
+    "music": {
+      "type": "audio-path",
+      "default": null,
+      "description": "optional background track, ducked under the voice"
+    },
+    "music_start": {
+      "type": "seconds",
+      "default": 0,
+      "description": "timeline second the music enters"
+    },
+    "music_mood": {
+      "type": "calm|chill-beat|emotional|groove|hiphop|upbeat",
+      "default": null,
+      "description": "music from the squad library (assets/music/index.json), first track of the mood; music (a path) wins when both are set"
+    },
+    "music_offset": {
+      "type": "seconds",
+      "description": "second of the track it starts from (library tracks default to their fill point, files to 0)"
+    },
+    "music_below_voice_db": {
+      "type": "dB",
+      "default": 22
+    },
+    "broll_mode": {
+      "type": "auto|manual|off",
+      "default": "auto",
+      "description": "auto = broll-suggest fills the items; manual = items written by hand; off = the plain talking-head-captions render, byte for byte"
+    },
+    "broll_min_gap_s": {
+      "type": "seconds",
+      "default": 6,
+      "description": "at most one B-roll item every N seconds (between starts)"
+    },
+    "broll_hook_free_s": {
+      "type": "seconds",
+      "default": 3,
+      "description": "no B-roll in the first N seconds (the hook)"
+    },
+    "broll_cta_free_s": {
+      "type": "seconds",
+      "default": 2.5,
+      "description": "no B-roll in the last N seconds (the call to action)"
+    },
+    "broll_max_items": {
+      "type": "number",
+      "default": 6,
+      "description": "most items in one video (4 to 6 is the target for 45 to 60 s)"
+    }
+  },
+  "hooks_timeline": [
+    {
+      "at": 0,
+      "hook": "text_pop_in",
+      "why": "headline readable on frame 0, settles in 0.26 s"
+    },
+    {
+      "at": 0,
+      "hook": "headline_fixed",
+      "why": "the promise stays on screen the whole video (headline_mode fixed)"
+    },
+    {
+      "at": 0,
+      "hook": "caption_bold_word",
+      "why": "most viewers start muted; the spoken word grows, keywords in yellow"
+    },
+    {
+      "at": "punch_at",
+      "hook": "punch_in_cut",
+      "why": "simulates a second camera on the emphasis line"
+    },
+    {
+      "at": 0,
+      "hook": "slow_push",
+      "why": "keeps a locked-off shot alive"
+    },
+    {
+      "at": "broll",
+      "hook": "broll_card",
+      "why": "an animated card when the speech says a number, price, list, steps, offer, turn or comment invitation"
+    },
+    {
+      "at": "broll",
+      "hook": "broll_full",
+      "why": "the client's own photo or video, 1.5 to 3 s, when the speech names it"
+    }
+  ],
+  "spec": {
+    "spec_version": 1,
+    "id": "$slot:id",
+    "canvas": {
+      "width": 1080,
+      "height": 1920,
+      "fps": 30
+    },
+    "duration": "$slot:duration",
+    "platforms": "$slot:platforms",
+    "layers": [
+      {
+        "id": "talk",
+        "src": "$slot:video",
+        "kind": "video",
+        "in": "$slot:video_in",
+        "start": 0,
+        "duration": "$slot:duration",
+        "fit": "cover",
+        "audio": true,
+        "framing": "talking-head"
+      }
+    ],
+    "transitions": {
+      "jcut_frames": 2,
+      "audio_xfade_ms": 60,
+      "punch_alternate": 0.07
+    },
+    "camera": [
+      {
+        "type": "push",
+        "start": 0,
+        "end": "$slot:duration",
+        "from": 1,
+        "to": 1.04
+      },
+      {
+        "type": "punch_in",
+        "at": "$slot:punch_at",
+        "until": "$slot:punch_until",
+        "amount": 0.07
+      }
+    ],
+    "camera_focus": "$slot:focus",
+    "flashes": [],
+    "texts": [
+      {
+        "id": "hook",
+        "role": "hook",
+        "lines": "$slot:hook_lines",
+        "mode": "$slot:headline_mode",
+        "start": 0,
+        "end": "$slot:hook_end",
+        "x": 540,
+        "y": "$slot:text_y",
+        "animation": "pop_in",
+        "fit_width": true,
+        "max_width_px": "$slot:headline_max_width",
+        "style": {
+          "font_family": "Anton",
+          "font_px": "$slot:font_px",
+          "size_basis": "em",
+          "line_spacing_px": "$slot:headline_line_px",
+          "bold": false,
+          "color": "#ffffff",
+          "outline_px": 6,
+          "outline_color": "#14101c",
+          "shadow_px": 4
+        }
+      }
+    ],
+    "captions": {
+      "words": "$slot:words",
+      "y": "$slot:caption_y",
+      "max_words": 3,
+      "preset": "$slot:caption_preset",
+      "highlight_active": true,
+      "pop_scale": 114,
+      "max_width_px": 820,
+      "emphasis_color": "#ffd84d",
+      "style": {
+        "font_family": "Anton",
+        "font_px": "$slot:caption_font_px",
+        "size_basis": "em",
+        "bold": false,
+        "color": "#ffffff",
+        "highlight_color": "#ffffff",
+        "outline_px": 6,
+        "outline_color": "#14101c",
+        "shadow_px": 4,
+        "uppercase": true
+      }
+    },
+    "audio": {
+      "music": {
+        "path": "$slot:music",
+        "mood": "$slot:music_mood",
+        "start": "$slot:music_start",
+        "offset": "$slot:music_offset",
+        "below_voice_db": "$slot:music_below_voice_db",
+        "duck_db": 8
+      },
+      "sfx": [],
+      "loudness": {
+        "target_lufs": -14,
+        "true_peak_db": -1
+      },
+      "voice_cleanup": {
+        "highpass_hz": 80
+      }
+    },
+    "protect_regions": "$slot:protect_regions",
+    "hooks_applied": [
+      {
+        "hook": "text_pop_in",
+        "at": 0,
+        "why": "headline readable on frame 0"
+      },
+      {
+        "hook": "headline_fixed",
+        "at": 0,
+        "why": "headline on screen for the whole video, Anton ~86 px"
+      },
+      {
+        "hook": "caption_bold_word",
+        "at": 0,
+        "why": "bold-word captions: caps, spoken word grows, keywords yellow"
+      },
+      {
+        "hook": "punch_in_cut",
+        "at": "$slot:punch_at",
+        "why": "simulates a second camera on the emphasis line"
+      },
+      {
+        "hook": "slow_push",
+        "at": 0,
+        "why": "keeps a locked-off shot alive"
+      }
+    ],
+    "alignment": {
+      "text": "$slot:alignment_text",
+      "visual": "$slot:visual_note",
+      "audio": "speaker voice at -14 LUFS; optional music ducked under the voice"
+    },
+    "frame_at": 1.5,
+    "output": {
+      "crf": 20,
+      "preset": "medium"
+    },
+    "broll": {
+      "mode": "$slot:broll_mode",
+      "min_gap_s": "$slot:broll_min_gap_s",
+      "hook_free_s": "$slot:broll_hook_free_s",
+      "cta_free_s": "$slot:broll_cta_free_s",
+      "max_items": "$slot:broll_max_items",
+      "items": []
+    }
+  }
+}

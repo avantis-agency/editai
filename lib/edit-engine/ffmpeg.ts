@@ -7,6 +7,7 @@ import { buildAss } from "./ass.ts";
 import { ffmpeg, fontsDirFor, hasAudio, loudness } from "./measure.ts";
 import { fitTexts, type FitLog } from "./safezones.ts";
 import { adjacent, assertValid, musicPath, sfxStart, takes, type CameraMove, type EditSpec, type MediaLayer } from "./spec.ts";
+import { materializeBroll } from "./broll.ts";
 
 const f3 = (n: number) => Number(n.toFixed(3)).toString();
 const SS = 2; // zoompan supersampling, limits sub-pixel jitter on slow pushes
@@ -59,6 +60,40 @@ export function zoomAt(moves: CameraMove[], fps: number, n: number): number {
     }
   }
   return Math.max(1, z);
+}
+
+const stageOf = (o: RenderOptions) => o.onStage ?? (() => {});
+
+/**
+ * One B-roll layer over the camera output (2.1.0). Cards: QuickTime Animation with alpha, placed frame-exact
+ * like editonny's render.py (settb, setpts=N+start, overlay format=auto). Inserts: the person's image (slow push)
+ * or video (muted), cover-fitted to its rect. k scales positions for the draft render. Returns the next input index.
+ */
+function brollLayer(l: MediaLayer, k: number, input: number, below: string, outLabel: string, args: string[], graph: string[], fps: number, scale: number): number {
+  const F0 = Math.round(l.start * fps), F1 = Math.round((l.start + l.duration) * fps), n = Math.max(1, F1 - F0);
+  const r = l.rect!, rw = Math.round(r.w * scale), rh = Math.round(r.h * scale), x = Math.round(r.x * scale), y = Math.round(r.y * scale);
+  const enable = `enable='between(n,${F0},${F1 - 1})'`;
+  if (l.alpha) {
+    args.push("-i", l.src);
+    const sc = scale !== 1 ? `,scale=${rw}:${rh}:flags=bicubic` : "";
+    graph.push(`[${input}:v]trim=end_frame=${n},settb=1/${fps},setpts=N+${F0},format=rgba${sc},scale=out_color_matrix=bt709:out_range=tv,format=yuva420p[B${k}]`);
+    graph.push(`[${below}][B${k}]overlay=x=${x}:y=${y}:eof_action=pass:format=auto:${enable}[${outLabel}]`);
+    return input + 1;
+  }
+  const b = Math.round((l.border_px ?? 0) * scale);
+  const pad = b ? `,pad=iw+${2 * b}:ih+${2 * b}:${b}:${b}:color=${l.border_color ?? "white"}` : "";
+  let head: string;
+  if (l.kind === "image") {
+    args.push("-loop", "1", "-framerate", String(fps), "-t", f3(l.duration + 0.5), "-i", l.src);
+    // slow push 1.00 -> 1.05 over the insert (supersampled, as the main camera)
+    head = `fps=${fps},${fitChain(l, rw * SS, rh * SS)},setsar=1,zoompan=z='1+0.05*on/${n}':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s=${rw}x${rh}:fps=${fps}`;
+  } else {
+    args.push("-ss", f3(l.in ?? 0), "-t", f3(l.duration + 0.5), "-i", l.src);
+    head = `setpts=PTS-STARTPTS,fps=${fps},${fitChain(l, rw, rh)},setsar=1`;
+  }
+  graph.push(`[${input}:v]${head},format=yuv420p${pad},tpad=stop_mode=clone:stop_duration=${f3(l.duration)},trim=end_frame=${n},settb=1/${fps},setpts=PTS-STARTPTS+${F0}[B${k}]`);
+  graph.push(`[${below}][B${k}]overlay=x=${x - b}:y=${y - b}:eof_action=pass:${enable}[${outLabel}]`);
+  return input + 1;
 }
 
 export interface RenderResult { out: string; frame: string; fit_log: FitLog[]; seconds: number; resolved_spec: string }
@@ -166,10 +201,12 @@ function duckFilter(thr: number, duckDb: number): string {
 const STEREO = "aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo";
 
 export async function render(spec: EditSpec, outMp4: string, opts: RenderOptions = {}): Promise<RenderResult> {
-  assertValid(spec);
   const t0 = performance.now();
   const out = resolve(outMp4);
   const outDir = dirname(out);
+  // B-roll: cards without a current clip are drawn (editonny), marks become cards; nothing when absent or "off"
+  if (spec.broll && spec.broll.mode !== "off") { stageOf(opts)("broll"); materializeBroll(spec, join(outDir, ".editai-broll-cache")); }
+  assertValid(spec);
   const work = join(outDir, `.work-${spec.id}`);
   mkdirSync(work, { recursive: true });
   const { width: W, height: H, fps } = spec.canvas;
@@ -191,6 +228,7 @@ export async function render(spec: EditSpec, outMp4: string, opts: RenderOptions
   let cur = "base";
   const layerAudio: string[] = [];
   spec.layers.forEach((l, i) => {
+    if (l.broll) return; // B-roll layers go above the camera, after the zoom (below)
     const speed = l.speed ?? 1;
     const p = plans.get(l)!;
     const tail = Math.max(0, p.aEnd - (l.start + l.duration));
@@ -231,7 +269,17 @@ export async function render(spec: EditSpec, outMp4: string, opts: RenderOptions
   }
   if (!opts.noText && (spec.texts.length || spec.captions)) post.push(`ass=edit.ass:fontsdir=${fontsDirFor(work)}`);
   post.push("format=yuv420p");
-  graph.push(`[${cur}]${post.join(",")}[vout]`);
+  const broll = spec.layers.filter((l) => l.broll);
+  if (!broll.length) graph.push(`[${cur}]${post.join(",")}[vout]`);
+  else {
+    // camera (and flashes) first, then the B-roll over the moved picture, then the text on top of everything
+    const textAt = post.findIndex((p) => p.startsWith("ass="));
+    const cam = post.slice(0, textAt >= 0 ? textAt : post.length - 1);
+    graph.push(`[${cur}]${cam.length ? cam.join(",") : "null"}[cam]`);
+    let top = "cam";
+    broll.forEach((l, k) => { input = brollLayer(l, k, input, top, `P${k}`, args, graph, fps, OW / W); top = `P${k}`; });
+    graph.push(`[${top}]${post.slice(cam.length).join(",")}[vout]`);
+  }
   // audio lives in its own graph and its own pass (deterministic, see TAIL)
   const agraph: string[] = [];
   const Dp = f3(D + TAIL);

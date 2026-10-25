@@ -7,6 +7,8 @@
 //   bun lib/edit-engine/cli.ts sfx-synth [dir]                       regenerate the provisional SFX
 //   bun lib/edit-engine/cli.ts validate <spec.json>                  structural check only
 //   bun lib/edit-engine/cli.ts transcribe <video> <out.json> [lang]  optional local word timings (editonny faster-whisper)
+//   bun lib/edit-engine/cli.ts broll-suggest <spec.json> [--project DIR] [--out F]   automatic B-roll: client media by spoken word + editonny cards (exit 3: no editonny, media only)
+//   bun lib/edit-engine/cli.ts broll-render <spec.json> [--project DIR] [--out F]    draw the cards (editonny render_visuals) into the project cache
 //   bun lib/edit-engine/cli.ts preview <spec.json> [--video out.mp4] [--port 4840] [--open] [--final-name "Nome"] [--downloads DIR]   mini editor on 127.0.0.1
 //   bun lib/edit-engine/cli.ts preview <spec.json> --stop            stop the preview of this spec
 //   bun lib/edit-engine/cli.ts apply-feedback <spec.json> <feedback.json> [--out-dir DIR] [--no-render]
@@ -46,6 +48,7 @@ import { answerBrief, askUserQuestion, confirmBrief, isState, loadNiches, number
 import { extractStyle, loadStyle, styleReport } from "./style.ts";
 import { APP_DIR, appRoots, projectDir } from "./project.ts";
 import { agentInbox, sendCommand, serverFor } from "./live.ts";
+import { materializeBroll, suggestBroll } from "./broll.ts";
 
 const argv = process.argv.slice(2);
 /** Removes `--name [value]` from argv; undefined when absent, "" when given without a value. */
@@ -101,6 +104,31 @@ if (cmd === "agent-inbox" || cmd === "edit-op" || cmd === "agent-reply") {
   const r = await sendCommand(spec, { cmd: "reply", id: b, status: o.status, message: o.message ?? "" });
   console.log(JSON.stringify(r, null, 2));
   process.exit(r?.ok ? 0 : 1);
+} else if (cmd === "broll-suggest" || cmd === "broll-render") {
+  const o = { project: flag("--project"), out: flag("--out") };
+  const [, a] = argv;
+  if (!a) usage();
+  const spec = loadSpec(a);
+  const out = resolve(o.out || (cmd === "broll-suggest" && !/\.broll\.spec\.json$/i.test(a) ? a.replace(/(\.plan)?\.spec\.json$|\.json$/i, "") + ".broll.spec.json" : a));
+  const ts = (t: number) => `${String(Math.floor(t / 60)).padStart(2, "0")}:${(t % 60).toFixed(2).padStart(5, "0")}`;
+  let code = 0;
+  if (cmd === "broll-suggest") {
+    const r = suggestBroll(spec, projectDir(o.project || spec.broll?.project || undefined));
+    code = r.exitCode;
+    if (r.exitCode === 3) console.error(`broll-suggest: ${r.editonny.reason}\nsó a mídia da pasta do cliente entrou (casada por palavra); o vídeo renderiza com ela e com os ganchos de sempre`);
+  } else {
+    if (o.project) spec.broll = { ...(spec.broll ?? { mode: "auto", items: [] }), project: projectDir(o.project) };
+    const notes = materializeBroll(spec, join(dirname(out), ".editai-broll-cache"));
+    if (notes.some((n) => /fora do vídeo|sem editonny/.test(n))) code = 3;
+  }
+  const b = spec.broll!;
+  writeFileSync(out, JSON.stringify(spec, null, 2));
+  console.log(`B-roll ${b.mode}: ${b.items.length} item(ns) · ${b.editonny ?? ""}`);
+  for (const it of b.items) console.log(`  ${it.id} ${ts(it.start)}-${ts(it.end)} ${it.kind === "card" ? `card ${it.template}${it.clip ? " [clip ok]" : " [falta broll-render]"}` : `mídia ${it.src?.split(/[\\/]/).pop()} (${it.layout ?? "full"})`} · legenda ${it.captions ?? "keep"} · "${it.quote}"`);
+  for (const s of b.skipped ?? []) console.log(`  fora    ${ts(s.at)} ${s.what}: ${s.why}`);
+  for (const n of b.notes ?? []) console.log(`  nota    ${n}`);
+  console.log(`spec: ${out}`);
+  process.exit(code);
 } else if (cmd === "brief") {
   const o = { project: flag("--project"), answers: flag("--answers"), answersJson: flag("--answers-json"), confirm: flag("--confirm") !== undefined, adjust: flag("--adjust"), format: flag("--format") };
   const [, a] = argv;

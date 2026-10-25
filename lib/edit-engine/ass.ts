@@ -152,7 +152,39 @@ export function captionStyle(c: Captions): TextStyle {
   return c.preset === "bold-word" ? { ...BOLD_WORD_STYLE, ...c.style } : c.style;
 }
 
+/** The B-roll window that moves a caption group (2.1.0, written by resolveSpec): its y, or null = as written. */
+export function groupWindow(c: Captions, g: Captions["words"]) {
+  if (!c.windows?.length || !g.length) return null;
+  const a = g[0].start, b = g[g.length - 1].end;
+  return c.windows.find((w) => !w.hide && w.start < b && w.end > a) ?? null;
+}
+
+/** The part of [s, e] outside the B-roll windows that hide captions (a card writing the same words), or null. */
+export function visibleSpan(c: Captions, s: number, e: number): [number, number] | null {
+  for (const w of c.windows ?? []) {
+    if (!w.hide || w.end <= s || w.start >= e) continue;
+    if (w.start <= s && w.end >= e) return null;
+    if (w.start <= s) s = w.end; else e = w.start;
+  }
+  return e - s >= 0.01 ? [s, e] : null;
+}
+
 const HOLD_S = 0.25; // bold-word: a group stays up to 0.25 s into the pause (never past the next group)
+
+/** On-screen spans of each caption group after the B-roll windows (same order as captionGroups); [] = hidden. */
+export function captionSpans(c: Captions): [number, number][][] {
+  const gs = captionGroups(c);
+  return gs.map((g, gi) => {
+    const nextStart = gi + 1 < gs.length ? gs[gi + 1][0].start : Infinity;
+    const end = c.preset === "bold-word" ? Math.min(g[g.length - 1].end + HOLD_S, nextStart) : g[g.length - 1].end;
+    const out: [number, number][] = [];
+    for (let j = 0; j < g.length; j++) {
+      const v = visibleSpan(c, g[j].start, j + 1 < g.length ? g[j + 1].start : end);
+      if (v) out.push(v);
+    }
+    return out;
+  });
+}
 
 /**
  * bold-word: one event per spoken word. The spoken word grows to pop_scale % in
@@ -169,20 +201,25 @@ function boldWordEvents(c: Captions, x: number): string[] {
   const pop = Math.round(c.pop_scale ?? 114);
   const groups = captionGroups(c);
   groups.forEach((group, gi) => {
+    const win = groupWindow(c, group);
     const nextStart = gi + 1 < groups.length ? groups[gi + 1][0].start : Infinity;
     const fs = c.group_font_px?.[gi];
     const fsTag = fs ? `\\fs${assSize(fs, st)}` : "";
     for (let j = 0; j < group.length; j++) {
-      const start = group[j].start;
-      const end = j + 1 < group.length ? group[j + 1].start : Math.min(group[group.length - 1].end + HOLD_S, nextStart);
+      let start = group[j].start;
+      let end = j + 1 < group.length ? group[j + 1].start : Math.min(group[group.length - 1].end + HOLD_S, nextStart);
+      const clip = c.windows?.length ? visibleSpan(c, start, end) : [start, end];
+      if (!clip) continue;
+      const entered = clip[0] === start;
+      [start, end] = clip;
       const text = group.map((w, k) => {
         const word = esc(w.word.toUpperCase().replace(/[.,!?;:…]+$/u, ""));
         const col = w.emphasis && emph ? emph : k === j ? act : base;
         const grow = k === j ? `\\fscx100\\fscy100\\t(0,80,\\fscx${pop}\\fscy${pop})` : "\\fscx100\\fscy100";
         return `{\\c${col}${grow}}${word}`;
       }).join(" ");
-      const y = Math.round(c.y);
-      const head = j === 0
+      const y = Math.round(win?.y ?? c.y);
+      const head = j === 0 && entered
         ? `{\\an5\\move(${Math.round(x)},${y + 12},${Math.round(x)},${y},0,80)\\fad(80,0)${fsTag}}`
         : `{\\an5\\pos(${Math.round(x)},${y})${fsTag}}`;
       out.push(`Dialogue: 0,${ts(start)},${ts(end)},Captions,,0,0,0,,${head}${text}`);
@@ -198,9 +235,12 @@ function captionEvents(c: Captions, x: number): string[] {
   const st = c.style;
   const base = assColor(st.color ?? "#ffffff");
   for (const group of captionGroups(c)) {
+    const win = groupWindow(c, group);
     for (let j = 0; j < group.length; j++) {
-      const start = group[j].start;
-      const end = j + 1 < group.length ? group[j + 1].start : group[group.length - 1].end;
+      const clip = c.windows?.length ? visibleSpan(c, group[j].start, j + 1 < group.length ? group[j + 1].start : group[group.length - 1].end)
+        : [group[j].start, j + 1 < group.length ? group[j + 1].start : group[group.length - 1].end];
+      if (!clip) continue;
+      const [start, end] = clip;
       const text = group.map((w, k) => {
         const word = esc(st.uppercase ? w.word.toUpperCase() : w.word);
         const active = k === j && c.highlight_active !== false && !!st.highlight_color;
@@ -209,7 +249,7 @@ function captionEvents(c: Captions, x: number): string[] {
         const col = emph ? assColor(c.emphasis_color) : assColor(st.highlight_color);
         return `{\\c${col}\\fscx110\\fscy110}${word}{\\c${base}\\fscx100\\fscy100}`;
       }).join(" ");
-      out.push(`Dialogue: 0,${ts(start)},${ts(end)},Captions,,0,0,0,,{\\an5\\pos(${Math.round(x)},${Math.round(c.y)})}${text}`);
+      out.push(`Dialogue: 0,${ts(start)},${ts(end)},Captions,,0,0,0,,{\\an5\\pos(${Math.round(x)},${Math.round(win?.y ?? c.y)})}${text}`);
     }
   }
   return out;

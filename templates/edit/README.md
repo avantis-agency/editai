@@ -61,3 +61,15 @@ Clipe com a voz do apresentador e tempos por palavra vindos de transcrição (`b
 **Vários takes.** Troque `layers` pela lista de cortes (um layer por frase, `framing` igual em todos) e apague o `punch_in` fixo de `camera`: `transitions` (já no template: J-cut de 2 quadros, crossfade de áudio de 60 ms, punch-in alternado de 7%) cuida das trocas. Nunca dissolve de imagem entre takes do mesmo enquadramento; `transition_in: {type: "dissolve"}` só entre `framing` diferentes. Efeitos sonoros nos cortes só com música, baixos (−26 a −32 dB) e com `only_with_music: true`. O `cli.ts th-batch` faz isso sozinho para N vídeos: recebe os takes, a headline e o roteiro de cada um (`examples/talking-head-batch.json`), pega as palavras dadas ou transcreve os clipes, aplica a grafia do roteiro, renderiza, roda o QA e confere a prévia de cada vídeo.
 
 Voz com passa-alta de 80 Hz, mix a −14 LUFS e pico até −1 dBTP medido depois do AAC. Tamanhos com `size_basis: "em"` são em px de CSS: o motor converte pela métrica da fonte (Anton 86 em = 149 no libass). Slots obrigatórios: `id`, `video`, `words`, `hook_lines`, `duration`, `visual_note`, `alignment_text`. Sem `words`, o template não roda: tempos nunca são inventados.
+
+## `talking-head-broll` · Rosto falando com legenda e B-roll automático
+
+Desde a 2.1.0. É o `talking-head-captions` com a seção `broll` ligada (`broll_mode: "auto"`). O `cli.ts broll-suggest` preenche os itens a partir da fala, o `cli.ts broll-render` desenha os cards e o render põe tudo por cima da câmera e por baixo do texto. O `th-batch` com `"template": "talking-head-broll"` faz os dois passos sozinho (`examples/talking-head-broll-batch.json`).
+
+| Quando | Gancho | Por quê |
+|---|---|---|
+| a fala cita algo que está em `<projeto>/editai/broll/` | `broll_full` | a mídia do próprio cliente, de 1,5 a 3 s, entra 0,25 s antes da palavra |
+| a fala diz número, preço, lista, passos, oferta, virada ou convite a comentar | `broll_card` | card do editonny 1.0.0 com o valor lido na fala; um som por card |
+| ponto marcado no mini editor ("põe um card aqui") | `broll_card` | o editonny monta o card com a frase dita ali |
+
+Slots novos: `broll_mode` (`auto`, `manual`, `off`), `broll_min_gap_s` (6), `broll_hook_free_s` (3), `broll_cta_free_s` (2,5), `broll_max_items` (6). Nada nos 3 primeiros segundos nem nos 2,5 s finais, um item a cada 6 s, nunca sobre olhos e boca, a headline, a legenda ou a interface das plataformas. Com `broll_mode: "off"` o vídeo sai igual ao do `talking-head-captions`, byte a byte. Sem o editonny, só a mídia do cliente entra.

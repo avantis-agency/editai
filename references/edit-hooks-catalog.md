@@ -117,6 +117,30 @@ Coluna "Motor" diz como o `lib/edit-engine/ffmpeg.ts` executa o gancho. "Manual"
 - **Motor:** `layers[]` com `rect` e `border_px`.
 - **Fonte:** "B-roll insert" entre as mudanças visuais, Strategia-X (01/07/2026); prova como alavanca principal da holding zone, Kallaway (`08-spoken-hooks.md`).
 
+### `broll_card` · Card animado da fala (B-roll automático)
+- **O que é:** um card animado (contador, preço, lista, passos, palavra de impacto, selo, convite a comentar) desenhado por cima da pessoa no momento em que ela fala aquilo.
+- **Quando usar:** número com unidade, preço com contexto, lista, passos, oferta, virada ou convite a comentar ditos na gravação; ou um ponto marcado com "põe um card aqui".
+- **Para que serve:** a prova visual do que foi dito, sem cortar a voz; troca de estímulo a cada 6 s no máximo.
+- **Padrão:** nada nos 3 primeiros segundos nem nos 2,5 s finais; um item a cada 6 s; o valor sai da fala, nunca do exemplo do modelo (se o detector não leu o valor, o card não entra); fora de olhos e boca, da headline e da legenda. Card que escreve as mesmas palavras esconde a legenda enquanto está na tela; contador e preço deixam a legenda e procuram outro lugar, ou sobem a legenda até logo acima do card. Um som do card por vez, da biblioteca CC0.
+- **Motor:** `broll.items[]` com `kind: "card"` (`cli.ts broll-suggest` e `broll-render`); o editonny 1.0.0 instalado acha o momento (`suggest_visuals.py`) e desenha o `.mov` com alfa (`render_visuals.py`), por subprocesso. QA: `broll_hook_window`, `broll_face`, `broll_caption_overlap`, `broll_quote`, `broll_provenance`.
+- **Fonte:** regras de `suggest_visuals.py` (MIN_GAP, HOOK_DEFAULT, CTA_DEFAULT, LEAD, READ_AFTER) e "Never invent data" do editonny (MIT, Matheus Gomes); `hidesCaptions` do catálogo de cenas dele.
+
+### `broll_full` · Mídia do cliente em tela cheia
+- **O que é:** corte de 1,5 a 3 s para uma foto ou vídeo do próprio cliente, com a voz continuando por baixo.
+- **Quando usar:** quando a fala cita algo que o cliente mandou em `<projeto>/editai/broll/` (nome do arquivo ou etiqueta do `broll.json` igual a uma palavra dita).
+- **Para que serve:** mostrar o produto, o lugar ou o resultado real no segundo em que ele é citado. Mídia real vence o card no mesmo trecho.
+- **Padrão:** entra 0,25 s antes da palavra e dura até o fim da frase (1,5 a 3 s); foto com aproximação lenta, vídeo mudo; whoosh baixo só com música; legenda e headline continuam por cima.
+- **Motor:** `broll.items[]` com `kind: "insert"`, `layout: "full"`.
+- **Fonte:** padrão do `broll_overlay` deste catálogo; inserts do `compose_final.py` do editonny (MIT).
+
+### `broll_pip` · Mídia do cliente numa janela
+- **O que é:** a mesma mídia do `broll_full`, numa janela com borda branca, com a pessoa visível ao lado.
+- **Quando usar:** só quando pedido e quando há lugar fora de olhos, boca e legenda (num selfie com o rosto no centro, quase nunca há).
+- **Para que serve:** prova sem tirar a pessoa da tela.
+- **Padrão:** borda branca de 6 px; o QA confere a janela contra o rosto e a legenda.
+- **Motor:** `broll.items[]` com `kind: "insert"`, `layout: "pip"` e `rect`.
+- **Fonte:** inserts `pip` do `compose_final.py` do editonny (MIT).
+
 ### `screen_slot` · Tela do app no quadro
 - **O que é:** gravação de tela do app dentro de uma janela com borda, sobre o rosto ou o cenário.
 - **Quando usar:** POV com o app; entre o 3º e o 10º segundo.

@@ -10,6 +10,7 @@ import { captionGroups, captionStyle, widestMoment } from "./ass.ts";
 import { zoomAt } from "./ffmpeg.ts";
 import { assSize } from "./fonts.ts";
 import { adjacent, ghostDissolves, resolveSpec, SQUAD_ROOT, takes, type EditSpec, type Rect } from "./spec.ts";
+import { brollChecks, brollOn, contactSheet } from "./broll.ts";
 
 /** Distinct zoom values (3 decimals) the camera reaches between two timeline seconds. */
 function zoomsDuring(spec: EditSpec, s: number, e: number): number[] {
@@ -67,10 +68,10 @@ export function runQa(spec: EditSpec, video: string, opts: { reportDir?: string;
   // 2. text geometry, measured on the rendered glyphs
   const boxes: Record<string, Rect | null> = {};
   for (const t of spec.texts) boxes[t.id] = measureTextBox(spec, t.id, measureTime(t), work);
+  const perGroup: { text: string; at: number; box: Rect | null }[] = [];
   if (spec.captions?.words.length) {
     // every caption group is measured (each group has its own width); the union is checked
     let u: Rect | null = null;
-    const perGroup: { text: string; at: number; box: Rect | null }[] = [];
     for (const g of captionGroups(spec.captions)) {
       const at = widestMoment(g); // whole group on screen, longest word active (widest state)
       const b = measureTextBox(spec, "captions", at, work);
@@ -116,6 +117,13 @@ export function runQa(spec: EditSpec, video: string, opts: { reportDir?: string;
   for (const t of spec.texts) {
     const b = boxes[t.id];
     if (!b) add({ id: `text_rendered_${t.id}`, blocking: true, pass: false, detail: "no lit pixels: text did not render", tool: "ffmpeg bbox" });
+  }
+  // 2b. B-roll (2.1.0): hook and CTA windows, gap, face, captions, quote, provenance, render cost
+  if (brollOn(spec) && spec.broll!.items.length) {
+    for (const c of brollChecks(spec, perGroup, boxes[spec.texts.find((t) => t.role === "hook")?.id ?? ""] ?? null)) add(c);
+    const sheet = contactSheet(spec, video, join(reportDir, `${spec.id}.broll-sheet.png`), join(work, "sheet"));
+    measured.broll_sheet = sheet;
+    measured.broll_items = spec.broll!.items.map((i) => ({ id: i.id, kind: i.kind, template: i.template ?? null, src: i.src ?? null, start: i.start, end: i.end, captions: i.captions ?? "keep", quote: i.quote, ink: i.clip?.ink ?? null }));
   }
 
   // 3. legibility and dwell time

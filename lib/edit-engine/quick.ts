@@ -50,6 +50,9 @@ const WHOOSH = ["whoosh", "woosh", "swoosh", "vush", "vuch", "whooshes", "uuush"
 const ZOOM = ["zoom", "zum", "zoon", "zoomzinho", "aproxima", "aproximar", "punch", "punch in", "punch-in", "close"];
 const HERE = ["aqui", "agora", "nesse ponto", "neste ponto", "nesse momento", "neste momento", "nesse trecho", "neste trecho", "here", "now", "this moment", "this point"];
 const CONDITION = ["quando", "sempre que", "toda vez", "depois que", "antes de", "enquanto", "assim que", "when", "whenever", "while", "as soon as", "fala", "diz", "falar", "says", "say"];
+const BROLL = ["b-roll", "broll", "b roll", "brol", "b-rol", "b rol", "cutaway", "insert", "midia de apoio", "imagem de apoio", "video de apoio"];
+const CARD = ["card", "cards", "cartao", "visual", "animacao", "grafico", "graphic"];
+const SHORTER = ["mais curto", "mais curta", "curtinho", "curtinha", "encurta", "encurtar", "encurte", "menos tempo", "mais rapido", "shorter", "shorten"];
 const MOODS = ["calm", "calma", "calmo", "chill", "groove", "upbeat", "animada", "animado", "emocional", "emotional", "hiphop", "hip hop", "outra", "outro", "another", "different", "diferente"];
 
 /** The help shown in the page ("o que eu posso pedir"), in the order people need it. */
@@ -67,6 +70,9 @@ export const QUICK_HELP: { say: string; does: string }[] = [
   { say: "sem música · com música", does: "desliga ou liga a música" },
   { say: "tira o whoosh · põe o whoosh", does: "whoosh nas trocas de take" },
   { say: "zoom aqui", does: "zoom no cursor (com um trecho selecionado: punch-in no trecho)" },
+  { say: "tira esse b-roll", does: "com o cursor no B-roll (card ou mídia do cliente): tira ele do vídeo" },
+  { say: "põe um card aqui", does: "pede um card animado no cursor, montado com a frase dita ali (precisa do editonny)" },
+  { say: "b-roll mais curto", does: "o B-roll no cursor termina meio segundo antes (nunca menos de 1,5 s)" },
   { say: "desfaz", does: "desfaz o último pedido feito" },
 ];
 
@@ -131,8 +137,29 @@ export function quickCommand(text: string, ctx: QuickCtx): QuickResult | null {
     return { kind: "ops", cmd: "pause", ops, say };
   });
 
+  // B-roll (2.1.0): take it out, ask for a card here, make it shorter
+  const isBroll = has(n, BROLL), isCard = has(n, CARD) && !isCaption && !isHeadline;
+  const at = ctx.selection ? ctx.selection.start : ctx.cursor;
+  const itemAt = () => (ctx.cur.broll && ctx.cur.broll.mode !== "off" ? (ctx.cur.broll.items ?? []) : []).find((i) => at >= i.start - 0.2 && at <= i.end + 0.2) ?? null;
+  const shorter = (isBroll || isCard) && has(n, SHORTER);
+  if ((isBroll || isCard) && has(n, REMOVE) && !shorter) hits.push(() => {
+    const it = itemAt();
+    if (!it && !(ctx.cur.broll?.marks ?? []).some((m) => Math.abs(m.at - at) <= 1)) return { kind: "fail", cmd: "broll_remove", message: `Não há B-roll no cursor (${fmtT(at)}). Leve o cursor até o bloco na faixa B-roll e peça de novo.` };
+    return { kind: "ops", cmd: "broll_remove", ops: [{ op: "broll_remove", at }], say: it ? `B-roll tirado de ${fmtT(it.start)} a ${fmtT(it.end)}` : `Marcação de card tirada em ${fmtT(at)}` };
+  });
+  if (isCard && !isBroll && !has(n, REMOVE) && !shorter && (has(n, ON) || has(n, HERE) || wordsN <= 3)) hits.push(() => {
+    if (itemAt()) return { kind: "fail", cmd: "broll_card", message: `Já tem B-roll no cursor (${fmtT(at)}). Peça "tira esse b-roll" antes, ou leve o cursor para outro ponto.` };
+    return { kind: "ops", cmd: "broll_card", ops: [{ op: "broll_card", at }], say: `Card pedido em ${fmtT(at)}: ele é montado com a frase dita ali na próxima prévia` };
+  });
+  if (shorter) hits.push(() => {
+    const it = itemAt();
+    if (!it) return { kind: "fail", cmd: "broll_shorten", message: `Não há B-roll no cursor (${fmtT(at)}).` };
+    if (it.end - it.start <= 1.5 + 1e-3) return { kind: "fail", cmd: "broll_shorten", message: `Esse B-roll já está no mínimo (1,5 s).` };
+    return { kind: "ops", cmd: "broll_shorten", ops: [{ op: "broll_shorten", at, by: 0.5 }], say: `B-roll de ${fmtT(it.start)} mais curto (meio segundo a menos)` };
+  });
+
   // cut the selected stretch
-  if (!isPause && has(n, REMOVE) && has(n, STRETCH) && !isCaption && !isHeadline && !isMusic && !isWhoosh && !has(n, ZOOM)) hits.push(() => {
+  if (!isPause && !isBroll && !isCard && has(n, REMOVE) && has(n, STRETCH) && !isCaption && !isHeadline && !isMusic && !isWhoosh && !has(n, ZOOM)) hits.push(() => {
     const s = ctx.selection;
     if (!s) return { kind: "ask", cmd: "cut", question: "Qual trecho? Arraste numa faixa da linha do tempo para selecionar e peça de novo." };
     return { kind: "ops", cmd: "cut", ops: [{ op: "cut", start: s.start, end: s.end }], say: `Trecho de ${fmtS(s.end - s.start)} cortado em ${fmtT(s.start)}` };

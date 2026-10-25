@@ -44,7 +44,8 @@ Checklist:
 2. Write `slots.json` and run `bun lib/edit-engine/cli.ts from-template <template> slots.json <id>.spec.json`.
 3. Inspect a gridded frame of the main media; set `protect_regions` (eyes and mouth), `text_y`, `focus`.
 4. Confirm every `hooks_applied` id exists in `references/edit-hooks-catalog.md`; fill `alignment`.
-5. Run `bun lib/edit-engine/cli.ts validate <id>.spec.json` until it prints `valid`.
+5. Talking head with B-roll (`talking-head-broll`, or a `broll` section): run `bun lib/edit-engine/cli.ts broll-suggest <id>.spec.json --project <dir>` and `broll-render`; every item keeps a `quote` from the transcript and a `provenance`, and a card value comes from the speech (exit 3 = no editonny: client media only).
+6. Run `bun lib/edit-engine/cli.ts validate <id>.spec.json` until it prints `valid`.
 
 ## Output
 `<id>.spec.json` in the run directory.
@@ -55,3 +56,4 @@ Checklist:
 - On-screen text lines equal the source text character for character.
 - `alignment.text`, `alignment.visual` and `alignment.audio` are non-empty.
 - When the main media shows a face, `protect_regions` has at least one rectangle.
+- With `broll.mode` other than `off`, every item has a non-empty `quote` and `provenance.source`.

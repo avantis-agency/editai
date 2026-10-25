@@ -16,6 +16,7 @@ import { BOLD_WORD_STYLE, captionGroups } from "./ass.ts";
 import { BadRequest, styleOfSpec, trimLimits, validateCaptionEdits, validateEmphasis, validateStyle, type CaptionEdit, type EmphasisEdit, type Feedback, type Section, type StyleChoice } from "./feedback.ts";
 import { musicIndex, pickSfx, pickTrack, sfxIndex, trackFile, effectFile } from "./library.ts";
 import { musicPath, takes, type EditSpec, type MediaLayer } from "./spec.ts";
+import { fitBrollWindows } from "./broll.ts";
 
 export type StoredOp =
   | { op: "cut"; start: number; end: number }
@@ -27,7 +28,10 @@ export type StoredOp =
   | { op: "music"; mood?: string; track?: string; start?: number }
   | { op: "caption_size"; pct: number }
   | { op: "caption_move"; y: number }
-  | { op: "whoosh_cuts" };
+  | { op: "whoosh_cuts" }
+  | { op: "broll_remove"; at: number }
+  | { op: "broll_card"; at: number; note?: string }
+  | { op: "broll_shorten"; at: number; by: number };
 /** One stored operation: `uid` names it, `req` is the request that made it ("p3"). */
 export type EditOp = StoredOp & { uid: string; req?: string };
 
@@ -103,8 +107,27 @@ export function rippleTrim(spec: EditSpec, t: { id: string; start_delta: number;
   if (spec.audio.music?.start) spec.audio.music.start = r3(span(spec.audio.music.start));
   for (const h of spec.hooks_applied) h.at = r3(point(h.at));
   if (spec.frame_at !== undefined) spec.frame_at = r3(span(spec.frame_at));
+  if (spec.broll) {
+    // B-roll (2.1.0): items follow the picture like the texts; one squeezed under 1 s leaves the video
+    const keep: typeof spec.broll.items = [];
+    for (const it of spec.broll.items ?? []) {
+      const a = r3(span(it.start)), b = r3(span(it.end));
+      if (b - a < 1) { (spec.broll.notes ??= []).push(`B-roll ${it.id} saiu com o corte de ${t.id}`); continue; }
+      it.start = a; it.end = b; keep.push(it);
+    }
+    spec.broll.items = keep;
+    for (const m of spec.broll.marks ?? []) m.at = r3(point(m.at));
+  }
   spec.duration = oldD + shift;
 }
+
+/** The B-roll item under T (0.2 s of slack), else the nearest one within 1 s. */
+function brollAt(b: NonNullable<EditSpec["broll"]>, t: number) {
+  const items = b.items ?? [];
+  return items.find((i) => t >= i.start - 0.2 && t <= i.end + 0.2)
+    ?? items.map((i) => ({ i, d: Math.min(Math.abs(t - i.start), Math.abs(t - i.end)) })).filter((x) => x.d <= 1).sort((x, y) => x.d - y.d)[0]?.i ?? null;
+}
+const brollName = (i: NonNullable<EditSpec["broll"]>["items"][number]) => (i.kind === "card" ? `card ${i.template}` : `mídia ${(i.src ?? "").split(/[\\/]/).pop()}`);
 
 /** Splits take `l` at timeline second t: same source, the second piece continues where the first stops. */
 function splitTake(spec: EditSpec, l: MediaLayer, t: number): MediaLayer {
@@ -241,6 +264,33 @@ export function applyOp(spec: EditSpec, src: EditSpec, o: StoredOp, srcDuration:
       spec.captions.y = Math.round(o.y);
       return `legenda ${o.y < was ? "mais para cima" : "mais para baixo"} (y ${was} -> ${spec.captions.y})`;
     }
+    case "broll_remove": {
+      const b = spec.broll;
+      const it = b && b.mode !== "off" ? brollAt(b, o.at) : null;
+      const marks = (b?.marks ?? []).filter((m) => Math.abs(m.at - o.at) <= 1 || (it && m.resolved === it.id));
+      if (!it && !marks.length) throw new OpError(`não há B-roll perto de ${fmtT(o.at)}`);
+      if (it) b!.items = b!.items.filter((x) => x !== it);
+      if (marks.length) b!.marks = (b!.marks ?? []).filter((m) => !marks.includes(m));
+      return it ? `B-roll ${it.id} tirado (${brollName(it)}, ${fmtT(it.start)} a ${fmtT(it.end)})` : `marcação de card tirada em ${fmtT(o.at)}`;
+    }
+    case "broll_card": {
+      if (o.at >= D - 0.5) throw new OpError(`o card em ${fmtT(o.at)} fica no fim do vídeo`);
+      const b = (spec.broll ??= { mode: "auto", items: [] });
+      if (b.mode === "off") b.mode = "auto";
+      const it = brollAt(b, o.at);
+      if (it && o.at >= it.start - 0.2 && o.at <= it.end + 0.2) throw new OpError(`já tem B-roll aqui (${it.id}, ${brollName(it)}, ${fmtT(it.start)} a ${fmtT(it.end)}); peça "tira esse b-roll" antes`);
+      (b.marks ??= []).push({ at: r3(o.at), ...(o.note ? { note: o.note } : {}) });
+      return `card marcado em ${fmtT(o.at)}: o motor monta o card com a frase desse ponto na próxima prévia (precisa do editonny)`;
+    }
+    case "broll_shorten": {
+      const it = spec.broll && spec.broll.mode !== "off" ? brollAt(spec.broll, o.at) : null;
+      if (!it) throw new OpError(`não há B-roll perto de ${fmtT(o.at)}`);
+      const ne = snapF(Math.max(it.start + 1.5, it.end - o.by), fps);
+      if (ne >= it.end - 1e-3) throw new OpError(`o B-roll ${it.id} já está no mínimo (1,5 s)`);
+      const was = it.end - it.start;
+      it.end = r3(ne);
+      return `B-roll ${it.id} mais curto: ${fmtS(was)} -> ${fmtS(it.end - it.start)}`;
+    }
     case "whoosh_cuts": {
       const tk = takes(spec);
       if (tk.length < 2) throw new OpError("não há troca de take para pôr whoosh");
@@ -265,13 +315,14 @@ export function applyOps(spec: EditSpec, src: EditSpec, ops: EditOp[], srcDurati
     catch (e) { pending.push(`operação ${o.op}${o.req ? ` do pedido ${o.req}` : ""} não aplicada: ${(e as Error).message}`); }
   }
   for (const d of dropped) applied.push(`palavra da legenda removida: ${d}`);
+  if (spec.broll && ops.length) applied.push(...fitBrollWindows(spec)); // a cut can push a B-roll item into the hook or the CTA
 }
 
 // ── what the agent sends (edit-op) -> sections and stored ops ──────────────────
 
 /** Operation names the agent (and the quick commands) may use: the closed set. */
 export const OP_NAMES = ["cut", "trim_take", "zoom", "punch_in", "sfx", "sfx_remove", "music", "caption_size", "caption_move", "whoosh",
-  "headline", "caption_style", "caption_word", "caption_emphasis"] as const;
+  "headline", "caption_style", "caption_word", "caption_emphasis", "broll_remove", "broll_card", "broll_shorten"] as const;
 export type OpName = (typeof OP_NAMES)[number];
 
 export interface TranslateCtx {
@@ -345,6 +396,15 @@ export function translateOps(raw: unknown, ctx: TranslateCtx): Translated {
         }
         case "caption_move":
           addStored({ op: "caption_move", y: Math.round(num(r.y, "y", 0, work.canvas.height)) });
+          break;
+        case "broll_remove":
+          addStored({ op: "broll_remove", at: r3(num(r.at, "at", 0, D())) });
+          break;
+        case "broll_card":
+          addStored({ op: "broll_card", at: at(), ...(typeof r.note === "string" && r.note.trim() ? { note: r.note.trim().slice(0, 120) } : {}) });
+          break;
+        case "broll_shorten":
+          addStored({ op: "broll_shorten", at: r3(num(r.at, "at", 0, D())), by: r3(optNum(r.by, "by", 0.2, 3, 0.5)) });
           break;
         case "music": {
           const s = st();
@@ -457,6 +517,8 @@ export function liveSummary(cur: EditSpec, base: EditSpec, fb: Feedback | null) 
     zooms: cur.camera.filter((c) => c.type !== "push").map((c) => c.type === "impact" ? { kind: "zoom", at: r3(c.at), amount: c.amount }
       : c.type === "punch_in" ? { kind: c.auto ? "punch_in (auto, alternate takes)" : "punch_in", at: r3(c.at), until: r3(c.until), amount: c.amount } : null).filter(Boolean),
     sfx: cur.audio.sfx.map((x) => ({ at: r3(x.at), name: x.library ?? x.hook ?? x.src.split(/[\\/]/).pop(), gain_db: x.gain_db ?? 0 })),
+    broll: cur.broll ? { mode: cur.broll.mode, items: (cur.broll.items ?? []).map((i) => ({ id: i.id, what: brollName(i), start: r3(i.start), end: r3(i.end), quote: i.quote, captions: i.captions ?? "keep" })),
+      marks: (cur.broll.marks ?? []).map((m) => ({ at: r3(m.at), resolved: m.resolved ?? "no próximo render" })) } : null,
   };
 }
 
@@ -502,6 +564,9 @@ export const OPS_HELP = [
   { op: "caption_emphasis", fields: "index, on", what: "keyword colour on or off for one caption word", example: { op: "caption_emphasis", index: 11, on: true } },
   { op: "caption_size", fields: "pct (70..140)", what: "caption font as % of the original", example: { op: "caption_size", pct: 110 } },
   { op: "caption_move", fields: "y (45 to 85 % of the height)", what: "move the captions up or down (canvas px)", example: { op: "caption_move", y: 1250 } },
+  { op: "broll_remove", fields: "at", what: "remove the B-roll item (card or client media) under T, or a pending card mark", example: { op: "broll_remove", at: 9.6 } },
+  { op: "broll_card", fields: "at, note?", what: "ask for an animated card at T: an editonny suggest_visuals mark, built from the sentence spoken there on the next render (needs editonny)", example: { op: "broll_card", at: 5.7 } },
+  { op: "broll_shorten", fields: "at, by=0.5 (0.2..3)", what: "end the B-roll item under T earlier (never under 1.5 s)", example: { op: "broll_shorten", at: 9.6, by: 0.5 } },
 ] as const;
 
 /** Caption groups of the current video, for the timeline (text as shown, first word index). */

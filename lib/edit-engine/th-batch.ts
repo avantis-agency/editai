@@ -18,8 +18,12 @@
 //     "emphasis": ["water", "ten minutes"],                               optional: keywords painted in the caption
 //     "cut_whoosh": true,                                                 optional: low whoosh on clip changes (only with music)
 //     "style": "editai/styles/ref.style.json",                             optional: reference style profile (cli.ts style-extract)
-//     "slots": { <overrides> }
+//     "slots": { <overrides> },
+//     "template": "talking-head-broll",                                   optional (2.1.0): talking head with automatic B-roll
+//     "broll_marks": [5.7, 21.0]                                         optional: "põe um card aqui" points (editonny suggest_visuals marks)
 //   }],
+//   "template": "talking-head-broll",        optional: the same for every item (default talking-head-captions)
+//   "broll_project": "..",                    optional: project folder with editai/broll/ media and the card cache (default: the batch folder)
 //   "style": "editai/styles/ref.style.json"   optional: the same for every item (an item's own style wins)
 // }
 // Slot precedence: defaults < style profile < item.slots.
@@ -33,17 +37,20 @@ import { transcribe } from "./transcribe.ts";
 import { startPreview } from "./preview-server.ts";
 import type { EditSpec, MediaLayer } from "./spec.ts";
 import { applyStyleToSpec, loadStyle, styleSlots, type StyleProfile } from "./style.ts";
+import { suggestBroll } from "./broll.ts";
 
 type Word = { word: string; start: number; end: number; emphasis?: boolean };
 export interface Take { src: string; in: number; duration: number; framing?: string }
 export interface ThItem {
   id: string; hook_lines: string[]; takes: Take[]; words?: Word[]; words_files?: Record<string, string>;
   script?: string; emphasis?: string[]; cut_whoosh?: boolean; cut_whoosh_gain_db?: number; style?: string; slots?: Record<string, unknown>;
+  template?: string; broll_marks?: number[];
 }
-export interface ThBatch { out_dir: string; concurrency?: number; defaults?: Record<string, unknown>; style?: string; items: ThItem[] }
+export interface ThBatch { out_dir: string; concurrency?: number; defaults?: Record<string, unknown>; style?: string; template?: string; broll_project?: string; items: ThItem[] }
 export interface ThResult {
   id: string; ok: boolean; error?: string; mp4?: string; spec?: string; qa?: QaReport; render_s?: number;
   words_from?: string; script_check?: string; preview?: string; preview_command?: string; style?: string; style_log?: string[]; draft?: string;
+  broll?: string;
 }
 
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
@@ -101,7 +108,7 @@ function markEmphasis(words: Word[], phrases?: string[]): void {
 }
 
 export function buildItemSpec(item: ThItem, defaults: Record<string, unknown>, base: string, outDir: string, style?: StyleProfile): { spec: EditSpec; words_from: string; script_check: string; style_log: string[] } {
-  const template = loadTemplate("talking-head-captions");
+  const template = loadTemplate(item.template ?? "talking-head-captions");
   if (!item.id || !/^[a-z0-9][a-z0-9._-]*$/i.test(item.id)) throw new Error(`item id must be a filename-safe slug: ${item.id}`);
   if (!item.takes?.length) throw new Error(`${item.id}: takes is empty`);
   const takes = item.takes.map((t) => ({ ...t, src: expandPath(t.src, base) }));
@@ -178,7 +185,14 @@ export async function runThBatch(batchPath: string, opts: { previewCheck?: boole
       try {
         const stylePath = opts.style ? resolve(opts.style) : (item.style ?? batch.style);
         const style = stylePath ? loadStyle(expandPath(stylePath, base)) : undefined;
-        const { spec, words_from, script_check, style_log } = buildItemSpec(item, batch.defaults ?? {}, base, outDir, style);
+        const { spec, words_from, script_check, style_log } = buildItemSpec({ template: batch.template, ...item }, batch.defaults ?? {}, base, outDir, style);
+        if (spec.broll && spec.broll.mode === "auto" && !spec.broll.items?.length) {
+          // automatic B-roll (2.1.0): the client media of the project and the editonny cards, before the render
+          if (item.broll_marks?.length) spec.broll.marks = item.broll_marks.map((at) => ({ at }));
+          const r = suggestBroll(spec, batch.broll_project ? expandPath(batch.broll_project, base) : base);
+          res.broll = `${spec.broll.items.length} item(ns)${r.exitCode === 3 ? " (sem editonny: só mídia do cliente)" : ""}`;
+          console.log(`[th-batch] ${spec.id}: B-roll ${res.broll}`);
+        }
         res.words_from = words_from;
         res.script_check = script_check;
         if (style) { res.style = style.name; res.style_log = style_log; }

@@ -1,5 +1,5 @@
 name: editai
-version: 2.0.0
+version: 2.1.0
 protocol: "6.0"
 description: >
   EditAi (a play on "edita aí" and "Edit AI").
@@ -9,8 +9,10 @@ description: >
   applies cataloged edit hooks (impact zoom, slow push, punch-in cut, hard cut,
   smooth take cut with J-cut and audio crossfade, pattern break, animated text,
   bold-word captions, fixed headline, speed ramp, B-roll, whoosh, hit, riser,
-  music ducked under the voice, silence before the turn), writes a JSON edit
-  spec, renders it with ffmpeg and libass, and
+  music ducked under the voice, silence before the turn), adds automatic B-roll
+  to a talking head (the client's own media matched to spoken words and animated
+  cards from the installed editonny 1.0.0, placed off the face, the headline and
+  the captions), writes a JSON edit spec, renders it with ffmpeg and libass, and
   measures the result: platform safe zones on the real text bounding box, text
   size and dwell time, loudness at -14 LUFS, codec and frame rate. Ships a CC0
   music (by mood) and sound-effect starter kit with per-item licenses and pulls
@@ -20,7 +22,7 @@ description: >
   quick draft and finalize with QA, takes edit requests typed in plain words in
   that editor (quick commands applied by the engine, the rest served by the
   person's own Claude Code or Codex agent through a closed set of validated
-  operations, no paid API) over a four-track timeline, runs a short guided briefing for any niche
+  operations, no paid API) over a five-track timeline, runs a short guided briefing for any niche
   (0 to 5 clickable questions, a suggested plan, a saved profile per client),
   copies the editing style of a reference video into a style profile it applies,
   builds an optional Concat project to adjust by hand, and keeps the AI clip generation pipelines of
@@ -133,7 +135,10 @@ capabilities:
       slow push, punch-in cut, hard cut, smooth take cut with J-cut, audio
       crossfade and alternating punch-in, pattern break, animated text entrance,
       speed ramp, B-roll overlay, whoosh, hit, riser, silence before the turn,
-      music drop, background music ducked under the voice), writes the JSON
+      music drop, background music ducked under the voice), adds automatic
+      B-roll to a talking head (client media matched to spoken words, animated
+      cards for prices, counts, lists, steps and offers from the installed
+      editonny 1.0.0, never over eyes, mouth, headline or captions), writes the JSON
       edit spec, renders it with ffmpeg and libass, and runs a measured QA:
       text bounding box against Reels, TikTok, Shorts and Facebook Reels safe
       zones, font size floor, dwell time, eyes and mouth kept clear, -14 LUFS and
@@ -248,6 +253,9 @@ capabilities:
       - edita meu talking head com legenda em caixa alta, headline fixa, música de fundo baixinha e transição suave entre os takes
       - Usa o EditAi pra editar esse vídeo que eu gravei com legenda animada, cortes secos e zoom de impacto
       - Use EditAi to edit my talking head clip with word by word captions, jump cuts and a whoosh between takes
+      - coloca b-roll automático no meu talking head, com as fotos que eu mandei e cards animados quando eu falo preço e número
+      - quero que ele crie os b-rolls sozinho nesse vídeo falado, com a mídia do cliente na hora que eu cito
+      - Add automatic B-roll to my talking head video, with my own clips and animated cards when I say a price or a number
     not_for:
       - gerar vídeo com IA
       - generate ai video
@@ -273,6 +281,9 @@ capabilities:
         blocking: true
       - id: editai_edit_alignment
         description: the spec declares text, visual and audio intents and the auditor states whether they agree
+        blocking: true
+      - id: editai_edit_broll_qa
+        description: with broll.mode other than off, the QA checks broll_hook_window, broll_face, broll_caption_overlap, broll_safe_zone, broll_quote and broll_provenance pass, and the same spec with mode off renders the same bytes as without the broll section
         blocking: true
     fidelity:
       status: experimental
@@ -412,13 +423,14 @@ capabilities:
     description: >
       AI request box inside the EditAi mini editor of a rendered short-form edit
       (editor com IA): the person plays the video, moves the cursor or selects a
-      stretch on a four-track timeline (video thumbnails, caption blocks, edit
-      track with headline, zooms, punch-ins and sound effects, audio waveform with
-      the music bar) and types what to change in plain words ("tira essa pausa",
+      stretch on a five-track timeline (video thumbnails, caption blocks, edit
+      track with headline, zooms, punch-ins and sound effects, B-roll track with
+      cards and client media, audio waveform with the music bar) and types what to change in plain words ("tira essa pausa",
       "music lower", "zoom here"). Quick commands are resolved by the engine at
       once (remove the pause at the cursor, cut the selection, caption and headline
       size, style and position, replace or highlight a caption word, music level
-      and on or off, whoosh, zoom, undo). Free requests wait in a queue served by
+      and on or off, whoosh, zoom, remove a B-roll item, ask for a card here,
+      shorter B-roll, undo). Free requests wait in a queue served by
       the person's own Claude Code or Codex agent with agent-inbox, edit-op (a
       closed, validated set of operations, no path and no shell) and agent-reply,
       with no paid API key. Each request renders a quick draft, shows its status

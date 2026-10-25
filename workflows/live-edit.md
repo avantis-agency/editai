@@ -36,7 +36,7 @@ on_failure: abort
 
 ## open
 
-Start the mini editor on the rendered spec: `bun lib/edit-engine/cli.ts preview <spec.json> [--final-name "..."]` (127.0.0.1 only, per-run token). Give the person the URL. In the Editor tab they play the video, move the cursor on the 4 tracks (Vídeo, Legenda, Edição, Áudio), select a stretch by dragging, and type what to change in "Você pede".
+Start the mini editor on the rendered spec: `bun lib/edit-engine/cli.ts preview <spec.json> [--final-name "..."]` (127.0.0.1 only, per-run token). Give the person the URL. In the Editor tab they play the video, move the cursor on the 5 tracks (Vídeo, Legenda, Edição, B-roll, Áudio), select a stretch by dragging, and type what to change in "Você pede".
 
 ## serve
 
